@@ -2,27 +2,42 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('VacunaxMascota', {
+    await queryInterface.createTable('vacunasxMascota', {
       id: {
-        allowNull: false,
+        type: Sequelize.INTEGER,
         autoIncrement: true,
         primaryKey: true,
-        type: Sequelize.INTEGER
+        allowNull: false,
       },
       id_mascota: {
-        type: Sequelize.INTEGER
-      },
-      createdAt: {
+        type: Sequelize.INTEGER,
         allowNull: false,
-        type: Sequelize.DATE
+        references: {
+          model: 'mascotas',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
       },
-      updatedAt: {
+      id_vacuna: {
+        type: Sequelize.INTEGER,
         allowNull: false,
-        type: Sequelize.DATE
+        references: {
+          model: 'vacunas',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
+      },
+      fecha_aplicacion: {
+        type: Sequelize.DATEONLY,
+        allowNull: true
       }
+    }, {
+      tableName: "vacunasxMascota"
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('VacunaxMascota');
+    await queryInterface.dropTable('vacunasxMascota');
   }
 };

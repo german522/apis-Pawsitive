@@ -2,27 +2,37 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('Veterinarios', {
+    await queryInterface.createTable('veterinarios', {
       id: {
-        allowNull: false,
+        type: Sequelize.INTEGER,
         autoIncrement: true,
         primaryKey: true,
-        type: Sequelize.INTEGER
+        allowNull: false,
       },
       id_persona: {
-        type: Sequelize.INTEGER
-      },
-      createdAt: {
+        type: Sequelize.INTEGER,
         allowNull: false,
-        type: Sequelize.DATE
+        references: {
+          model: 'personas',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
       },
-      updatedAt: {
+      cedula: {
+        type: Sequelize.STRING(50),
         allowNull: false,
-        type: Sequelize.DATE
+        unique: true
+      },
+      especialidad: {
+        type: Sequelize.STRING(255),
+        allowNull: true
       }
+    }, {
+      tableName: "veterinarios"
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('Veterinarios');
+    await queryInterface.dropTable('veterinarios');
   }
 };
