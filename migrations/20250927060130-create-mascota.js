@@ -46,7 +46,15 @@ module.exports = {
       peso: {
         type: Sequelize.DECIMAL(5, 2),
         allowNull: true
-      }
+      },
+      historial_medico:{
+        type: Sequelize.TEXT,
+        allowNull: false
+      },
+      URL_imagen:{
+        type: Sequelize.TEXT,
+        allowNull: true
+      },
     }, {
       tableName: "mascotas"
     });

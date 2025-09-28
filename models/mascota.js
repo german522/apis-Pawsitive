@@ -42,6 +42,14 @@ module.exports = (sequelize, DataTypes) => {
       peso: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true
+      },
+      historial_medico:{
+        type: DataTypes.TEXT,
+        allowNull: false
+      },
+      URL_imagen:{
+        type: DataTypes.TEXT,
+        allowNull: true
       }
     },
     {

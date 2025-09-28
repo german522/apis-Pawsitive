@@ -34,7 +34,7 @@ exports.getById = async (req, res) => {
 // Crear nueva mascota (solo para clientes)
 exports.create = async (req, res) => {
   try {
-    const { nombre, especie, raza, sexo, color, fecha_nacimiento, peso } = req.body;
+    const { nombre, especie, raza, sexo, color, fecha_nacimiento, peso, historial_medico } = req.body;
     const clienteId = req.user.tipoId; // ID del cliente desde el token
 
     // Validaciones básicas
@@ -48,34 +48,58 @@ exports.create = async (req, res) => {
       return ApiResponse.notFound("Cliente no encontrado.", res);
     }
 
+    // Normalización mínima para comparación consistente
+    const _trim = v => (typeof v === 'string' ? v.trim() : v);
     const mascotaData = {
       id_cliente: clienteId,
-      nombre: nombre.trim(),
-      especie,
-      raza: raza?.trim() || null,
+      nombre: _trim(nombre),
+      especie, // valor catalogado
+      raza: _trim(raza) || null,
       sexo,
-      color: color?.trim() || null,
+      color: _trim(color) || null,
       fecha_nacimiento: fecha_nacimiento || null,
-      peso: peso || null
+      peso: peso || null,
+      historial_medico: _trim(historial_medico) || "",
+      URL_imagen: null
     };
 
+    // ✅ Validación de duplicado exacto vía repositorio
+    const duplicada = await MascotaRepository.findDuplicateExact({
+      id_cliente: mascotaData.id_cliente,
+      nombre: mascotaData.nombre,
+      especie: mascotaData.especie,
+      raza: mascotaData.raza,
+      sexo: mascotaData.sexo,
+      color: mascotaData.color,
+      fecha_nacimiento: mascotaData.fecha_nacimiento,
+      peso: mascotaData.peso
+    });
+
+    if (duplicada) {
+      return ApiResponse.validation(
+        "Ya existe una mascota registrada con exactamente los mismos datos. Revisa los campos que se ingresaron.",
+        null,
+        res
+      );
+    }
+
+    // Crear
     const mascota = await MascotaRepository.create(mascotaData);
     return ApiResponse.success("Mascota creada exitosamente.", { mascota }, res, 201);
 
   } catch (error) {
     console.error("❌ Error en POST /mascotas:", error);
-    
+
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
-
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
-
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
+
 
 // Actualizar mascota
 exports.update = async (req, res) => {
