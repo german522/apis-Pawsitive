@@ -1,0 +1,21 @@
+const express = require("express");
+const router = express.Router();
+const VeterinarioController = require("../controllers/VeterinarioController");
+const { authenticateToken, requireVeterinario } = require("../middlewares/auth");
+const { validateRegisterVeterinario } = require("../middlewares/validation");
+
+// Rutas públicas
+router.post("/register", validateRegisterVeterinario, VeterinarioController.register);
+
+// Rutas protegidas (solo para veterinarios autenticados)
+router.post("/logout", authenticateToken, requireVeterinario, VeterinarioController.logout);
+router.get("/profile", authenticateToken, requireVeterinario, VeterinarioController.getProfile);
+router.put("/profile", authenticateToken, requireVeterinario, VeterinarioController.updateProfile);
+router.delete("/account", authenticateToken, requireVeterinario, VeterinarioController.deleteAccount);
+
+// Rutas específicas para veterinarios - gestión de clientes
+router.get("/clientes", authenticateToken, requireVeterinario, VeterinarioController.getAllClientes);
+router.get("/clientes/:id", authenticateToken, requireVeterinario, VeterinarioController.getClienteById);
+router.get("/clientes-con-mascotas", authenticateToken, requireVeterinario, VeterinarioController.getClientesConMascotas);
+
+module.exports = router;
