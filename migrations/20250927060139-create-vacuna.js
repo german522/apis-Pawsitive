@@ -13,10 +13,7 @@ module.exports = {
         type: Sequelize.STRING(100),
         allowNull: false
       },
-      descripcion: {
-        type: Sequelize.TEXT,
-        allowNull: true
-      }
+      // descripcion eliminado
     }, {
       tableName: "vacunas"
     });

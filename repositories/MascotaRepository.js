@@ -24,13 +24,6 @@ class MascotaRepository {
         return await Mascota.findByPk(id, {
             include: [
                 { 
-                    model: Cliente, 
-                    as: 'cliente',
-                    include: [
-                        { model: Persona, as: 'persona' }
-                    ]
-                },
-                { 
                     model: Vacuna, 
                     as: 'vacunas',
                     through: { attributes: ['fecha_aplicacion'] }
@@ -40,10 +33,9 @@ class MascotaRepository {
     }
 
     async findDuplicateExact(firma) {
-    // firma debe ser un objeto con las claves mencionadas arriba
     return await Mascota.findOne({
       where: firma,
-      attributes: ['id'] // solo necesitamos saber si existe
+      attributes: ['id'] 
     });
   }
 
@@ -66,24 +58,11 @@ class MascotaRepository {
     }
 
     async getByClienteId(id_cliente) {
-        return await Mascota.findAll({
-            where: { id_cliente },
-            include: [
-                { 
-                    model: Cliente, 
-                    as: 'cliente',
-                    include: [
-                        { model: Persona, as: 'persona' }
-                    ]
-                },
-                { 
-                    model: Vacuna, 
-                    as: 'vacunas',
-                    through: { attributes: ['fecha_aplicacion'] }
-                }
-            ]
-        });
-    }
+  return await Mascota.findAll({
+    where: { id_cliente },
+    attributes: ['id', 'URL_imagen', 'nombre', 'raza', 'fecha_nacimiento'],
+  });
+}
 
     async getByEspecie(especie) {
         return await Mascota.findAll({
