@@ -11,10 +11,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false
       },
-      descripcion: {
-        type: DataTypes.TEXT,
-        allowNull: true
-      }
+      // descripcion eliminado
     },
     {
       tableName: "vacunas",

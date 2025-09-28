@@ -105,7 +105,7 @@
   exports.update = async (req, res) => {
     try {
       const { id } = req.params;
-      const { nombre, especie, raza, sexo, color, fecha_nacimiento, peso } = req.body;
+      const { nombre, especie, raza, sexo, color, fecha_nacimiento, peso, historial_medico, URL_imagen } = req.body;
 
       if (!nombre && !especie && !raza && !sexo && !color && !fecha_nacimiento && !peso) {
         return ApiResponse.validation("Debe proporcionar al menos un campo para actualizar.", null, res);
@@ -129,7 +129,8 @@
         ...(sexo && { sexo }),
         ...(color !== undefined && { color: color?.trim() || null }),
         ...(fecha_nacimiento !== undefined && { fecha_nacimiento }),
-        ...(peso !== undefined && { peso })
+        ...(peso !== undefined && { peso }),
+        ...(historial_medico !== undefined && { historial_medico: historial_medico?.trim() || "" }),
       };
 
       const updatedMascota = await MascotaRepository.update(id, updatedData);
