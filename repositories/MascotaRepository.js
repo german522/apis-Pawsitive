@@ -39,6 +39,14 @@ class MascotaRepository {
         });
     }
 
+    async findDuplicateExact(firma) {
+    // firma debe ser un objeto con las claves mencionadas arriba
+    return await Mascota.findOne({
+      where: firma,
+      attributes: ['id'] // solo necesitamos saber si existe
+    });
+  }
+
     async create(data) {
         return await Mascota.create(data);
     }
