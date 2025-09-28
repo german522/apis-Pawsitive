@@ -40,11 +40,9 @@ app.get('/test-db', async (req, res) => {
   }
 });
 
-// Aquí irán las rutas de la API
-// app.use('/api/personas', require('./routes/personas'));
-// app.use('/api/clientes', require('./routes/clientes'));
-// app.use('/api/veterinarios', require('./routes/veterinarios'));
-// app.use('/api/mascotas', require('./routes/mascotas'));
+// Rutas de la API
+const apiRoutes = require('./routes');
+app.use('/api', apiRoutes);
 
 // Middleware para rutas no encontradas
 app.use((req, res, next) => {
