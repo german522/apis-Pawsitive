@@ -12,7 +12,10 @@
     "seed": "npx sequelize-cli db:seed:all",
     "seed:undo": "npx sequelize-cli db:seed:undo:all",
     "model": "npx sequelize-cli model:generate",
-    "migration": "npx sequelize-cli migration:generate"
+    "migration": "npx sequelize-cli migration:generate",
+    "migrate:prod": "npx sequelize-cli db:migrate --env production",
+    "migrate:undo:prod": "npx sequelize-cli db:migrate:undo --env production",
+    "seed:prod": "npx sequelize-cli db:seed:all --env production"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +31,7 @@
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
+    "cross-env": "^10.0.0",
     "nodemon": "^3.1.10",
     "sequelize-cli": "^6.6.3"
   }
