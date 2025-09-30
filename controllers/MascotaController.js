@@ -8,7 +8,7 @@
       const mascotas = await MascotaRepository.getAll();
       return ApiResponse.success("Mascotas obtenidas exitosamente.", { mascotas }, res);
     } catch (error) {
-      console.error("❌ Error en GET /mascotas:", error);
+      console.error("Error en GET /mascotas:", error);
       return ApiResponse.error("Error interno del servidor.", res);
     }
   };
@@ -26,7 +26,7 @@
       return ApiResponse.success("Mascota obtenida exitosamente.", { mascota }, res);
 
     } catch (error) {
-      console.error("❌ Error en GET /mascotas/:id:", error);
+      console.error("Error en GET /mascotas/:id:", error);
       return ApiResponse.error("Error interno del servidor.", res);
     }
   };
@@ -88,7 +88,7 @@
       return ApiResponse.success("Mascota creada exitosamente.", { mascota }, res, 201);
 
     } catch (error) {
-      console.error("❌ Error en POST /mascotas:", error);
+      console.error("Error en POST /mascotas:", error);
 
       if (error instanceof ValidationError) {
         return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -137,7 +137,7 @@
       return ApiResponse.success("Mascota actualizada exitosamente.", { mascota: updatedMascota }, res);
 
     } catch (error) {
-      console.error("❌ Error en PUT /mascotas/:id:", error);
+      console.error("Error en PUT /mascotas/:id:", error);
       
       if (error instanceof ValidationError) {
         return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -171,7 +171,7 @@
       return ApiResponse.success("Mascota eliminada exitosamente.", null, res);
 
     } catch (error) {
-      console.error("❌ Error en DELETE /mascotas/:id:", error);
+      console.error("Error en DELETE /mascotas/:id:", error);
       
       if (error instanceof DatabaseError) {
         return ApiResponse.error("Error en la base de datos.", res);
@@ -188,7 +188,7 @@ exports.getMascotasCliente = async (req, res) => {
     const mascotas = await MascotaRepository.getByClienteId(clienteId);
     return ApiResponse.success("Mascotas del cliente obtenidas exitosamente.", { mascotas }, res);
   } catch (error) {
-    console.error("❌ Error en GET /mascotas/mis-mascotas:", error);
+    console.error("Error en GET /mascotas/mis-mascotas:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -202,7 +202,7 @@ exports.getMascotasCliente = async (req, res) => {
       return ApiResponse.success(`Mascotas de especie ${especie} obtenidas exitosamente.`, { mascotas }, res);
 
     } catch (error) {
-      console.error("❌ Error en GET /mascotas/especie/:especie:", error);
+      console.error("Error en GET /mascotas/especie/:especie:", error);
       return ApiResponse.error("Error interno del servidor.", res);
     }
   };
@@ -227,7 +227,7 @@ exports.getMascotasCliente = async (req, res) => {
       return ApiResponse.success("Historial de vacunas obtenido exitosamente.", { historial }, res);
 
     } catch (error) {
-      console.error("❌ Error en GET /mascotas/:id/vacunas:", error);
+      console.error("Error en GET /mascotas/:id/vacunas:", error);
       return ApiResponse.error("Error interno del servidor.", res);
     }
   };

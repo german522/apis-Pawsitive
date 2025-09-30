@@ -75,7 +75,7 @@ exports.login = async (req, res) => {
     return ApiResponse.success("Login exitoso.", responseData, res);
 
   } catch (error) {
-    console.error("❌ Error en POST /auth/login:", error);
+    console.error("Error en POST /auth/login:", error);
 
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -94,7 +94,7 @@ exports.verifyToken = async (req, res) => {
   try {
     return ApiResponse.success("Token válido.", { user: req.user }, res);
   } catch (error) {
-    console.error("❌ Error en GET /auth/verify:", error);
+    console.error("Error en GET /auth/verify:", error);
     return ApiResponse.error("Error al verificar token.", res);
   }
 };
@@ -139,7 +139,7 @@ exports.refreshToken = async (req, res) => {
     return ApiResponse.success("Token renovado exitosamente.", responseData, res);
 
   } catch (error) {
-    console.error("❌ Error en POST /auth/refresh:", error);
+    console.error("Error en POST /auth/refresh:", error);
     return ApiResponse.unauthorized("Refresh token inválido.", res);
   }
 };

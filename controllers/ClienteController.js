@@ -85,7 +85,7 @@ exports.register = async (req, res) => {
 
   } catch (error) {
     await transaction.rollback();
-    console.error("❌ Error en POST /clientes/register:", error);
+    console.error("Error en POST /clientes/register:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -104,7 +104,7 @@ exports.logout = async (req, res) => {
   try {
     return ApiResponse.success("Logout exitoso. Token debe ser eliminado del cliente.", null, res);
   } catch (error) {
-    console.error("❌ Error en POST /clientes/logout:", error);
+    console.error("Error en POST /clientes/logout:", error);
     return ApiResponse.error("Error en logout.", res);
   }
 };
@@ -136,7 +136,7 @@ exports.deleteAccount = async (req, res) => {
 
   } catch (error) {
     await transaction.rollback();
-    console.error("❌ Error en DELETE /clientes/account:", error);
+    console.error("Error en DELETE /clientes/account:", error);
     
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
@@ -159,7 +159,7 @@ exports.getProfile = async (req, res) => {
     return ApiResponse.success("Perfil obtenido exitosamente.", { cliente }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /clientes/profile:", error);
+    console.error("Error en GET /clientes/profile:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -190,7 +190,7 @@ exports.updateProfile = async (req, res) => {
     return ApiResponse.success("Perfil actualizado exitosamente.", { persona: updatedPersona }, res);
 
   } catch (error) {
-    console.error("❌ Error en PUT /clientes/profile:", error);
+    console.error("Error en PUT /clientes/profile:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);

@@ -8,7 +8,7 @@ exports.getAll = async (req, res) => {
     const vacunaciones = await VacunaxMascotaRepository.getAll();
     return ApiResponse.success("Registros de vacunación obtenidos exitosamente.", { vacunaciones }, res);
   } catch (error) {
-    console.error("❌ Error en GET /vacunaciones:", error);
+    console.error("Error en GET /vacunaciones:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -26,7 +26,7 @@ exports.getById = async (req, res) => {
     return ApiResponse.success("Registro de vacunación obtenido exitosamente.", { vacunacion }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunaciones/:id:", error);
+    console.error("Error en GET /vacunaciones/:id:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -68,7 +68,7 @@ exports.aplicarVacuna = async (req, res) => {
     return ApiResponse.success("Vacuna aplicada exitosamente.", { vacunacion }, res, 201);
 
   } catch (error) {
-    console.error("❌ Error en POST /vacunaciones:", error);
+    console.error("Error en POST /vacunaciones:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -114,7 +114,7 @@ exports.update = async (req, res) => {
     return ApiResponse.success("Registro de vacunación actualizado exitosamente.", { vacunacion: updatedVacunacion }, res);
 
   } catch (error) {
-    console.error("❌ Error en PUT /vacunaciones/:id:", error);
+    console.error("Error en PUT /vacunaciones/:id:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -151,7 +151,7 @@ exports.delete = async (req, res) => {
     return ApiResponse.success("Registro de vacunación eliminado exitosamente.", null, res);
 
   } catch (error) {
-    console.error("❌ Error en DELETE /vacunaciones/:id:", error);
+    console.error("Error en DELETE /vacunaciones/:id:", error);
     
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
@@ -181,7 +181,7 @@ exports.getByMascotaId = async (req, res) => {
     return ApiResponse.success("Historial de vacunación obtenido exitosamente.", { historial }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunaciones/mascota/:id_mascota:", error);
+    console.error("Error en GET /vacunaciones/mascota/:id_mascota:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -201,7 +201,7 @@ exports.getByVacunaId = async (req, res) => {
     return ApiResponse.success("Registros de vacunación obtenidos exitosamente.", { registros }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunaciones/vacuna/:id_vacuna:", error);
+    console.error("Error en GET /vacunaciones/vacuna/:id_vacuna:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -226,7 +226,7 @@ exports.getHistorialCompleto = async (req, res) => {
     return ApiResponse.success("Historial completo de vacunación obtenido exitosamente.", { historial: historialCompleto }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunaciones/mascota/:id_mascota/historial:", error);
+    console.error("Error en GET /vacunaciones/mascota/:id_mascota/historial:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
