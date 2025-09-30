@@ -8,7 +8,7 @@ exports.getAll = async (req, res) => {
     const vacunas = await VacunaRepository.getAll();
     return ApiResponse.success("Vacunas obtenidas exitosamente.", { vacunas }, res);
   } catch (error) {
-    console.error("❌ Error en GET /vacunas:", error);
+    console.error("Error en GET /vacunas:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -26,7 +26,7 @@ exports.getById = async (req, res) => {
     return ApiResponse.success("Vacuna obtenida exitosamente.", { vacuna }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunas/:id:", error);
+    console.error("Error en GET /vacunas/:id:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -56,7 +56,7 @@ exports.create = async (req, res) => {
     return ApiResponse.success("Vacuna creada exitosamente.", { vacuna }, res, 201);
 
   } catch (error) {
-    console.error("❌ Error en POST /vacunas:", error);
+    console.error("Error en POST /vacunas:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -103,7 +103,7 @@ exports.update = async (req, res) => {
     return ApiResponse.success("Vacuna actualizada exitosamente.", { vacuna: updatedVacuna }, res);
 
   } catch (error) {
-    console.error("❌ Error en PUT /vacunas/:id:", error);
+    console.error("Error en PUT /vacunas/:id:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -132,7 +132,7 @@ exports.delete = async (req, res) => {
     return ApiResponse.success("Vacuna eliminada exitosamente.", null, res);
 
   } catch (error) {
-    console.error("❌ Error en DELETE /vacunas/:id:", error);
+    console.error("Error en DELETE /vacunas/:id:", error);
     
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
@@ -155,7 +155,7 @@ exports.getByNombre = async (req, res) => {
     return ApiResponse.success("Vacuna obtenida exitosamente.", { vacuna }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunas/nombre/:nombre:", error);
+    console.error("Error en GET /vacunas/nombre/:nombre:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -175,7 +175,7 @@ exports.getMascotasVacunadas = async (req, res) => {
     return ApiResponse.success("Mascotas vacunadas obtenidas exitosamente.", { mascotas }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /vacunas/:id/mascotas:", error);
+    console.error("Error en GET /vacunas/:id/mascotas:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };

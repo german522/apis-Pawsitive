@@ -96,7 +96,7 @@ exports.register = async (req, res) => {
 
   } catch (error) {
     await transaction.rollback();
-    console.error("❌ Error en POST /veterinarios/register:", error);
+    console.error("Error en POST /veterinarios/register:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -115,7 +115,7 @@ exports.logout = async (req, res) => {
   try {
     return ApiResponse.success("Logout exitoso. Token debe ser eliminado del cliente.", null, res);
   } catch (error) {
-    console.error("❌ Error en POST /veterinarios/logout:", error);
+    console.error("Error en POST /veterinarios/logout:", error);
     return ApiResponse.error("Error en logout.", res);
   }
 };
@@ -147,7 +147,7 @@ exports.deleteAccount = async (req, res) => {
 
   } catch (error) {
     await transaction.rollback();
-    console.error("❌ Error en DELETE /veterinarios/account:", error);
+    console.error("Error en DELETE /veterinarios/account:", error);
     
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
@@ -170,7 +170,7 @@ exports.getProfile = async (req, res) => {
     return ApiResponse.success("Perfil obtenido exitosamente.", { veterinario }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /veterinarios/profile:", error);
+    console.error("Error en GET /veterinarios/profile:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -213,7 +213,7 @@ exports.updateProfile = async (req, res) => {
     return ApiResponse.success("Perfil actualizado exitosamente.", { veterinario: updatedVeterinario }, res);
 
   } catch (error) {
-    console.error("❌ Error en PUT /veterinarios/profile:", error);
+    console.error("Error en PUT /veterinarios/profile:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
@@ -234,7 +234,7 @@ exports.getAllClientes = async (req, res) => {
     return ApiResponse.success("Clientes obtenidos exitosamente.", { clientes }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /veterinarios/clientes:", error);
+    console.error("Error en GET /veterinarios/clientes:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -252,7 +252,7 @@ exports.getClienteById = async (req, res) => {
     return ApiResponse.success("Cliente obtenido exitosamente.", { cliente }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /veterinarios/clientes/:id:", error);
+    console.error("Error en GET /veterinarios/clientes/:id:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -264,7 +264,7 @@ exports.getClientesConMascotas = async (req, res) => {
     return ApiResponse.success("Clientes con mascotas obtenidos exitosamente.", { clientes }, res);
 
   } catch (error) {
-    console.error("❌ Error en GET /veterinarios/clientes-con-mascotas:", error);
+    console.error("Error en GET /veterinarios/clientes-con-mascotas:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
