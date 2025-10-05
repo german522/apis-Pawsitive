@@ -64,13 +64,13 @@ app.use((err, req, res, next) => {
 
 // Iniciar servidor
 app.listen(PORT, async () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`🌐 URL: http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`URL: http://localhost:${PORT}`);
   
   try {
     await sequelize.authenticate();
-    console.log('✅ Conexión a la base de datos establecida correctamente');
+    console.log('Conexión a la base de datos establecida correctamente');
   } catch (error) {
-    console.error('❌ Error al conectar con la base de datos:', error.message);
+    console.error('Error al conectar con la base de datos:', error.message);
   }
 });
