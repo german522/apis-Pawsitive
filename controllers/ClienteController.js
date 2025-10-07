@@ -3,6 +3,8 @@ const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 const { sequelize } = require('../models');
+const VerificationUtils = require('../utils/verification');
+const { enviarCodigoVerificacion } = require('../utils/emailService');
 
 // Registro de cliente
 exports.register = async (req, res) => {
@@ -26,8 +28,10 @@ exports.register = async (req, res) => {
     }
 
     // Verificar si el correo ya existe
-    const existingPersona = await PersonaRepository.getByCorreo(correo);
-    if (existingPersona) {
+    const existingPersona = await PersonaRepository.getByCorreo(correo.toLowerCase().trim());
+
+    // Si ya existe y está verificado, no permitir registro duplicado
+    if (existingPersona && existingPersona.verificado) {
       await transaction.rollback();
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
@@ -35,7 +39,26 @@ exports.register = async (req, res) => {
     // Hashear contraseña
     const hashedPassword = await AuthUtils.hashPassword(contrasena);
 
-    // Crear persona
+    // Generar código y expiración
+    const codigo = VerificationUtils.generateCode();
+    const expiracion = VerificationUtils.generateExpirationDate();
+
+    // Si existe pero no está verificado -> reenvío de código (actualizar código y expiración)
+    if (existingPersona && !existingPersona.verificado) {
+      await PersonaRepository.update(existingPersona.id, {
+        codigo_verificacion: codigo,
+        codigo_expiracion: expiracion
+      });
+
+      await transaction.commit();
+
+      // Enviar correo con el código
+      await enviarCodigoVerificacion(existingPersona.correo, codigo, `${existingPersona.nombre} ${existingPersona.apellido_paterno}`);
+
+      return ApiResponse.success("Correo ya registrado pero no verificado. Se ha reenviado el código de verificación.", null, res);
+    }
+
+    // Crear persona no verificada (no crear cliente todavía)
     const personaData = {
       nombre: nombre.trim(),
       apellido_paterno: apellido_paterno.trim(),
@@ -43,45 +66,20 @@ exports.register = async (req, res) => {
       telefono: telefono?.trim() || null,
       correo: correo.toLowerCase().trim(),
       contrasena: hashedPassword,
-      URL_imagen: URL_imagen?.trim() || null
+      URL_imagen: URL_imagen?.trim() || null,
+      verificado: false,
+      codigo_verificacion: codigo,
+      codigo_expiracion: expiracion
     };
 
     const persona = await PersonaRepository.create(personaData);
 
-    // Crear cliente asociado
-    const clienteData = {
-      id_persona: persona.id,
-      fecha_registro: new Date()
-    };
-
-    const cliente = await ClienteRepository.create(clienteData);
-
     await transaction.commit();
 
-    // Generar tokens
-    const token = AuthUtils.generateToken(persona, 'cliente', cliente.id);
-    const refreshToken = AuthUtils.generateRefreshToken(persona);
+    // Enviar correo con el código de verificación
+    await enviarCodigoVerificacion(persona.correo, codigo, `${persona.nombre} ${persona.apellido_paterno}`);
 
-    const responseData = {
-      user: {
-        id: persona.id,
-        nombre: persona.nombre,
-        apellido_paterno: persona.apellido_paterno,
-        apellido_materno: persona.apellido_materno,
-        correo: persona.correo,
-        telefono: persona.telefono,
-        URL_imagen: persona.URL_imagen,
-        tipo: 'cliente',
-        fecha_registro: cliente.fecha_registro
-      },
-      tokens: {
-        accessToken: token,
-        refreshToken: refreshToken,
-        expiresIn: '24h'
-      }
-    };
-
-    return ApiResponse.success("Cliente registrado exitosamente.", responseData, res, 201);
+    return ApiResponse.success("Registro pendiente. Se ha enviado un código de verificación a tu correo. Verifica para completar el registro.", null, res, 201);
 
   } catch (error) {
     await transaction.rollback();

@@ -2,6 +2,7 @@ const { PersonaRepository, ClienteRepository, VeterinarioRepository } = require(
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
+const VerificationUtils = require('../utils/verification');
 
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
@@ -18,6 +19,10 @@ exports.login = async (req, res) => {
       return ApiResponse.unauthorized("Credenciales incorrectas.", res);
     }
 
+    // Bloquear login si la cuenta no está verificada
+    if (!persona.verificado) {
+      return ApiResponse.unauthorized("Cuenta no verificada. Revisa tu correo y verifica tu cuenta.", res);
+    }
     // Verificar contraseña
     const passwordMatch = await AuthUtils.comparePassword(contrasena, persona.contrasena);
     if (!passwordMatch) {
@@ -185,6 +190,17 @@ exports.verifyCode = async (req, res) => {
       codigo_verificacion: null,
       codigo_expiracion: null
     });
+
+    // Si la persona no tiene un tipo asignado (cliente/veterinario), y proviene de un registro de cliente,
+    // crear el registro en la tabla `clientes` ahora que el correo está verificado.
+    const personaActualizada = await PersonaRepository.getByCorreo(correo);
+
+    if (!personaActualizada.cliente && !personaActualizada.veterinario) {
+      // Crear cliente asociado
+      const cliente = await ClienteRepository.create({ id_persona: personaActualizada.id, fecha_registro: new Date() });
+      // Re-obtener persona con relaciones completas
+      // (PersonaRepository.getByCorreo incluirá ahora la relación cliente)
+    }
 
     // Obtener persona actualizada con relaciones
     const personaVerificada = await PersonaRepository.getByCorreo(correo);
