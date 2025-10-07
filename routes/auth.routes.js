@@ -7,6 +7,7 @@ const { validateLogin } = require("../middlewares/validation");
 // Rutas públicas (sin autenticación)
 router.post("/login", validateLogin, AuthController.login);
 router.post("/refresh", AuthController.refreshToken);
+router.post("/verify-code", AuthController.verifyCode);
 
 // Rutas protegidas (requieren autenticación)
 router.get("/verify", authenticateToken, AuthController.verifyToken);

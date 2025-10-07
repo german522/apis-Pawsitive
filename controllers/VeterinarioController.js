@@ -96,7 +96,7 @@ exports.register = async (req, res) => {
 
   } catch (error) {
     await transaction.rollback();
-    console.error("Error en POST /veterinarios/register:", error);
+    console.error("❌ Error en POST /veterinarios/register:", error);
     
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);

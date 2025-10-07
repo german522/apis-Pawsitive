@@ -143,3 +143,109 @@ exports.refreshToken = async (req, res) => {
     return ApiResponse.unauthorized("Refresh token inválido.", res);
   }
 };
+
+exports.verifyCode = async (req, res) => {
+  try {
+    const { correo, codigo } = req.body;
+
+    // Validaciones básicas
+    if (!correo || !codigo) {
+      return ApiResponse.validation("Correo y código son requeridos.", null, res);
+    }
+
+    // Buscar persona por correo
+    const persona = await PersonaRepository.getByCorreo(correo);
+    if (!persona) {
+      return ApiResponse.notFound("No se encontró una cuenta con ese correo.", res);
+    }
+
+    // Verificar si ya está verificado
+    if (persona.verificado) {
+      return ApiResponse.conflict("Esta cuenta ya ha sido verificada.", res);
+    }
+
+    // Verificar que tenga un código asignado
+    if (!persona.codigo_verificacion) {
+      return ApiResponse.error("No hay un código de verificación pendiente para esta cuenta.", res);
+    }
+
+    // Verificar que el código no haya expirado
+    if (VerificationUtils.isExpired(persona.codigo_expiracion)) {
+      return ApiResponse.unauthorized("El código de verificación ha expirado. Por favor solicita uno nuevo.", res);
+    }
+
+    // Verificar que el código sea correcto
+    if (persona.codigo_verificacion !== codigo) {
+      return ApiResponse.unauthorized("El código de verificación es incorrecto.", res);
+    }
+
+    // Actualizar persona: marcar como verificado y limpiar código
+    await PersonaRepository.update(persona.id, {
+      verificado: true,
+      codigo_verificacion: null,
+      codigo_expiracion: null
+    });
+
+    // Obtener persona actualizada con relaciones
+    const personaVerificada = await PersonaRepository.getByCorreo(correo);
+
+    // Determinar tipo de usuario y generar tokens
+    let userType = null;
+    let userTypeId = null;
+    let additionalData = {};
+
+    if (personaVerificada.cliente) {
+      userType = 'cliente';
+      userTypeId = personaVerificada.cliente.id;
+      additionalData = {
+        fecha_registro: personaVerificada.cliente.fecha_registro
+      };
+    } else if (personaVerificada.veterinario) {
+      userType = 'veterinario';
+      userTypeId = personaVerificada.veterinario.id;
+      additionalData = {
+        cedula: personaVerificada.veterinario.cedula,
+        especialidad: personaVerificada.veterinario.especialidad
+      };
+    }
+
+    // Generar tokens automáticamente
+    const token = AuthUtils.generateToken(personaVerificada, userType, userTypeId);
+    const refreshToken = AuthUtils.generateRefreshToken(personaVerificada);
+
+    const responseData = {
+      user: {
+        id: personaVerificada.id,
+        nombre: personaVerificada.nombre,
+        apellido_paterno: personaVerificada.apellido_paterno,
+        apellido_materno: personaVerificada.apellido_materno,
+        correo: personaVerificada.correo,
+        telefono: personaVerificada.telefono,
+        URL_imagen: personaVerificada.URL_imagen,
+        tipo: userType,
+        verificado: true,
+        ...additionalData
+      },
+      tokens: {
+        accessToken: token,
+        refreshToken: refreshToken,
+        expiresIn: '24h'
+      }
+    };
+
+    return ApiResponse.success("Cuenta verificada exitosamente. Has iniciado sesión automáticamente.", responseData, res);
+
+  } catch (error) {
+    console.error("❌ Error en POST /auth/verify-code:", error);
+
+    if (error instanceof ValidationError) {
+      return ApiResponse.validation(error.errors.map(e => e.message), null, res);
+    }
+
+    if (error instanceof DatabaseError) {
+      return ApiResponse.error("Error en la base de datos.", res);
+    }
+
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
