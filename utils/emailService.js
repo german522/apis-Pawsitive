@@ -6,9 +6,18 @@ const transporter = nodemailer.createTransport({
         user: process.env.EMAIL_USER || 'okitukisaludmental@gmail.com',
         pass: process.env.EMAIL_PASSWORD || 'rvkwtufutfjpqpuq',
     },
+    // timeouts para evitar que la conexión bloquee demasiado la transacción
+    connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT || '10000', 10),
+    greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT || '10000', 10),
+    socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT || '10000', 10)
 });
 
 const enviarCodigoVerificacion = async (correoDestino, codigo, nombreCompleto) => {
+    // Si está deshabilitado (por ejemplo en entornos donde SMTP está bloqueado), simular envío
+    if (process.env.EMAIL_DISABLED === 'true') {
+        console.log(`EMAIL_DISABLED=true - simulando envío de código ${codigo} a ${correoDestino}`);
+        return true;
+    }
     const mailOptions = {
         from: process.env.EMAIL_USER || 'okitukisaludmental@gmail.com',
         to: correoDestino,

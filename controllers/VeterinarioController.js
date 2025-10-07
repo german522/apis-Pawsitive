@@ -59,10 +59,16 @@ exports.register = async (req, res) => {
         codigo_expiracion: expiracion
       });
 
-      await transaction.commit();
+      // Enviar correo con el código ANTES de commitear
+      try {
+        await enviarCodigoVerificacion(existingPersona.correo, codigo, `${existingPersona.nombre} ${existingPersona.apellido_paterno}`);
+      } catch (emailErr) {
+        if (transaction && !transaction.finished) await transaction.rollback();
+        console.error('❌ Error al enviar correo:', emailErr);
+        return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
+      }
 
-      // Enviar correo con el código
-      await enviarCodigoVerificacion(existingPersona.correo, codigo, `${existingPersona.nombre} ${existingPersona.apellido_paterno}`);
+      await transaction.commit();
 
       return ApiResponse.success("Correo ya registrado pero no verificado. Se ha reenviado el código de verificación.", null, res);
     }
@@ -81,7 +87,6 @@ exports.register = async (req, res) => {
       codigo_expiracion: expiracion
     };
 
-    const persona = await PersonaRepository.create(personaData);
 
     // Crear veterinario asociado (existirá en BD pero la cuenta no podrá iniciar sesión hasta verificar el correo)
     const veterinarioData = {
@@ -90,17 +95,29 @@ exports.register = async (req, res) => {
       especialidad: especialidad?.trim() || null
     };
 
+    const persona = await PersonaRepository.create(personaData);
+
     const veterinario = await VeterinarioRepository.create(veterinarioData);
 
-    await transaction.commit();
+    // Enviar correo con el código de verificación ANTES de commitear
+    try {
+      await enviarCodigoVerificacion(persona.correo, codigo, `${persona.nombre} ${persona.apellido_paterno}`);
+    } catch (emailErr) {
+      if (transaction && !transaction.finished) await transaction.rollback();
+      console.error('❌ Error al enviar correo:', emailErr);
+      return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
+    }
 
-    // Enviar correo con el código de verificación
-    await enviarCodigoVerificacion(persona.correo, codigo, `${persona.nombre} ${persona.apellido_paterno}`);
+    await transaction.commit();
 
     return ApiResponse.success("Registro pendiente. Se ha enviado un código de verificación a tu correo. Verifica para completar el registro.", null, res, 201);
 
   } catch (error) {
-    await transaction.rollback();
+    try {
+      if (transaction && !transaction.finished) await transaction.rollback();
+    } catch (rbErr) {
+      console.warn('No se pudo hacer rollback (ya finalizada la transacción):', rbErr);
+    }
     console.error("❌ Error en POST /veterinarios/register:", error);
     
     if (error instanceof ValidationError) {
