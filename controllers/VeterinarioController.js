@@ -3,8 +3,6 @@ const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 const { sequelize } = require('../models');
-const VerificationUtils = require('../utils/verification');
-const { enviarCodigoVerificacion } = require('../utils/emailService');
 
 // Registro de veterinario
 exports.register = async (req, res) => {
@@ -32,9 +30,9 @@ exports.register = async (req, res) => {
     // Verificar si el correo ya existe
     const existingPersona = await PersonaRepository.getByCorreo(correo.toLowerCase().trim());
 
-    // Si ya existe y está verificado, no permitir registro duplicado
-    if (existingPersona && existingPersona.verificado) {
-      await transaction.rollback();
+    // Si ya existe, no permitir registro duplicado (sin verificación)
+    if (existingPersona) {
+      if (transaction && !transaction.finished) await transaction.rollback();
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
@@ -48,32 +46,7 @@ exports.register = async (req, res) => {
     // Hashear contraseña
     const hashedPassword = await AuthUtils.hashPassword(contrasena);
 
-    // Generar código y expiración
-    const codigo = VerificationUtils.generateCode();
-    const expiracion = VerificationUtils.generateExpirationDate();
-
-    // Si existe pero no está verificado -> reenvío de código (actualizar código y expiración)
-    if (existingPersona && !existingPersona.verificado) {
-      await PersonaRepository.update(existingPersona.id, {
-        codigo_verificacion: codigo,
-        codigo_expiracion: expiracion
-      });
-
-      // Enviar correo con el código ANTES de commitear
-      try {
-        await enviarCodigoVerificacion(existingPersona.correo, codigo, `${existingPersona.nombre} ${existingPersona.apellido_paterno}`);
-      } catch (emailErr) {
-        if (transaction && !transaction.finished) await transaction.rollback();
-        console.error('❌ Error al enviar correo:', emailErr);
-        return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
-      }
-
-      await transaction.commit();
-
-      return ApiResponse.success("Correo ya registrado pero no verificado. Se ha reenviado el código de verificación.", null, res);
-    }
-
-    // Crear persona (no verificado aún)
+    // Crear persona
     const personaData = {
       nombre: nombre.trim(),
       apellido_paterno: apellido_paterno.trim(),
@@ -81,36 +54,47 @@ exports.register = async (req, res) => {
       telefono: telefono?.trim() || null,
       correo: correo.toLowerCase().trim(),
       contrasena: hashedPassword,
-      URL_imagen: URL_imagen?.trim() || null,
-      verificado: false,
-      codigo_verificacion: codigo,
-      codigo_expiracion: expiracion
+      URL_imagen: URL_imagen?.trim() || null
     };
 
+    const persona = await PersonaRepository.create(personaData);
 
-    // Crear veterinario asociado (existirá en BD pero la cuenta no podrá iniciar sesión hasta verificar el correo)
+    // Crear veterinario asociado
     const veterinarioData = {
       id_persona: persona.id,
       cedula: cedula.trim(),
       especialidad: especialidad?.trim() || null
     };
 
-    const persona = await PersonaRepository.create(personaData);
-
     const veterinario = await VeterinarioRepository.create(veterinarioData);
-
-    // Enviar correo con el código de verificación ANTES de commitear
-    try {
-      await enviarCodigoVerificacion(persona.correo, codigo, `${persona.nombre} ${persona.apellido_paterno}`);
-    } catch (emailErr) {
-      if (transaction && !transaction.finished) await transaction.rollback();
-      console.error('❌ Error al enviar correo:', emailErr);
-      return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
-    }
 
     await transaction.commit();
 
-    return ApiResponse.success("Registro pendiente. Se ha enviado un código de verificación a tu correo. Verifica para completar el registro.", null, res, 201);
+    // Generar tokens
+    const token = AuthUtils.generateToken(persona, 'veterinario', veterinario.id);
+    const refreshToken = AuthUtils.generateRefreshToken(persona);
+
+    const responseData = {
+      user: {
+        id: persona.id,
+        nombre: persona.nombre,
+        apellido_paterno: persona.apellido_paterno,
+        apellido_materno: persona.apellido_materno,
+        correo: persona.correo,
+        telefono: persona.telefono,
+        URL_imagen: persona.URL_imagen,
+        tipo: 'veterinario',
+        cedula: veterinario.cedula,
+        especialidad: veterinario.especialidad
+      },
+      tokens: {
+        accessToken: token,
+        refreshToken: refreshToken,
+        expiresIn: '24h'
+      }
+    };
+
+    return ApiResponse.success("Veterinario registrado exitosamente.", responseData, res, 201);
 
   } catch (error) {
     try {
