@@ -3,68 +3,27 @@ const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 const { sequelize } = require('../models');
-const VerificationUtils = require('../utils/verification');
-const { enviarCodigoVerificacion } = require('../utils/emailService');
+// verification/email removed — registration will create persona+cliente immediately
 
-// Registro de cliente
+// Registro de cliente (sin verificación por correo)
 exports.register = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
   try {
-    const { 
-      nombre, 
-      apellido_paterno, 
-      apellido_materno, 
-      telefono, 
-      correo, 
-      contrasena,
-      URL_imagen 
-    } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, telefono, correo, contrasena, URL_imagen } = req.body;
 
-    // Validaciones básicas
     if (!nombre || !apellido_paterno || !correo || !contrasena) {
-      await transaction.rollback();
+      if (transaction && !transaction.finished) await transaction.rollback();
       return ApiResponse.validation("Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena.", null, res);
     }
 
-    // Verificar si el correo ya existe
     const existingPersona = await PersonaRepository.getByCorreo(correo.toLowerCase().trim());
-
-    // Si ya existe y está verificado, no permitir registro duplicado
-    if (existingPersona && existingPersona.verificado) {
-      await transaction.rollback();
+    if (existingPersona) {
+      if (transaction && !transaction.finished) await transaction.rollback();
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
-    // Hashear contraseña
     const hashedPassword = await AuthUtils.hashPassword(contrasena);
 
-    // Generar código y expiración
-    const codigo = VerificationUtils.generateCode();
-    const expiracion = VerificationUtils.generateExpirationDate();
-
-    // Si existe pero no está verificado -> reenvío de código (actualizar código y expiración)
-    if (existingPersona && !existingPersona.verificado) {
-      await PersonaRepository.update(existingPersona.id, {
-        codigo_verificacion: codigo,
-        codigo_expiracion: expiracion
-      });
-
-      // Enviar correo con el código ANTES de commitear
-      try {
-        await enviarCodigoVerificacion(existingPersona.correo, codigo, `${existingPersona.nombre} ${existingPersona.apellido_paterno}`);
-      } catch (emailErr) {
-        if (transaction && !transaction.finished) await transaction.rollback();
-        console.error('❌ Error al enviar correo:', emailErr);
-        return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
-      }
-
-      await transaction.commit();
-
-      return ApiResponse.success("Correo ya registrado pero no verificado. Se ha reenviado el código de verificación.", null, res);
-    }
-
-    // Crear persona no verificada (no crear cliente todavía)
     const personaData = {
       nombre: nombre.trim(),
       apellido_paterno: apellido_paterno.trim(),
@@ -72,27 +31,44 @@ exports.register = async (req, res) => {
       telefono: telefono?.trim() || null,
       correo: correo.toLowerCase().trim(),
       contrasena: hashedPassword,
-      URL_imagen: URL_imagen?.trim() || null,
-      verificado: false,
-      codigo_verificacion: codigo,
-      codigo_expiracion: expiracion
+      URL_imagen: URL_imagen?.trim() || null
     };
 
     const persona = await PersonaRepository.create(personaData);
 
-    // Enviar correo con el código de verificación ANTES de commitear
-    try {
-      await enviarCodigoVerificacion(persona.correo, codigo, `${persona.nombre} ${persona.apellido_paterno}`);
-    } catch (emailErr) {
-      if (transaction && !transaction.finished) await transaction.rollback();
-      console.error('❌ Error al enviar correo:', emailErr);
-      return ApiResponse.error('No se pudo enviar el correo de verificación. Intenta más tarde.', res);
-    }
+    const clienteData = {
+      id_persona: persona.id,
+      fecha_registro: new Date()
+    };
+
+    const cliente = await ClienteRepository.create(clienteData);
 
     await transaction.commit();
 
-    return ApiResponse.success("Registro pendiente. Se ha enviado un código de verificación a tu correo. Verifica para completar el registro.", null, res, 201);
+    // Generar tokens
+    const token = AuthUtils.generateToken(persona, 'cliente', cliente.id);
+    const refreshToken = AuthUtils.generateRefreshToken(persona);
 
+    const responseData = {
+      user: {
+        id: persona.id,
+        nombre: persona.nombre,
+        apellido_paterno: persona.apellido_paterno,
+        apellido_materno: persona.apellido_materno,
+        correo: persona.correo,
+        telefono: persona.telefono,
+        URL_imagen: persona.URL_imagen,
+        tipo: 'cliente',
+        fecha_registro: cliente.fecha_registro
+      },
+      tokens: {
+        accessToken: token,
+        refreshToken: refreshToken,
+        expiresIn: '24h'
+      }
+    };
+
+    return ApiResponse.success("Cliente registrado exitosamente.", responseData, res, 201);
   } catch (error) {
     try {
       if (transaction && !transaction.finished) await transaction.rollback();
@@ -100,15 +76,12 @@ exports.register = async (req, res) => {
       console.warn('No se pudo hacer rollback (ya finalizada la transacción):', rbErr);
     }
     console.error("❌ Error en POST /clientes/register:", error);
-    
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
-
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
-
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
