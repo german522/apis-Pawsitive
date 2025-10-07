@@ -35,6 +35,19 @@ module.exports = (sequelize, DataTypes) => {
       URL_imagen: {
         type: DataTypes.TEXT,
         allowNull: true
+      },
+      verificado: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+      },
+      codigo_verificacion: {
+        type: DataTypes.STRING(6),
+        allowNull: true
+      },
+      codigo_expiracion: {
+        type: DataTypes.DATE,
+        allowNull: true
       }
     },
     {
@@ -57,4 +70,4 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   return Persona;
-};  
+};
