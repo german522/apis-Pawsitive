@@ -18,4 +18,8 @@ router.get("/clientes", authenticateToken, requireVeterinario, VeterinarioContro
 router.get("/clientes/:id", authenticateToken, requireVeterinario, VeterinarioController.getClienteById);
 router.get("/clientes-con-mascotas", authenticateToken, requireVeterinario, VeterinarioController.getClientesConMascotas);
 
+// Rutas protegidas para listado de veterinarios en general y veterinarios en particular
+router.get("/", VeterinarioController.getAll);
+router.get("/:id", VeterinarioController.getById);
+
 module.exports = router;
