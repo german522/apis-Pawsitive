@@ -274,3 +274,32 @@ exports.getClientesConMascotas = async (req, res) => {
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
+
+exports.getAll = async (req, res) => {
+  try {
+    const veterinarios = await VeterinarioRepository.getAll();
+    return ApiResponse.success("Veterinarios obtenidos exitosamente.", { veterinarios }, res);
+
+  } catch (error) {
+    console.error("Error en GET /veterinarios:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
+
+// Obtener veterinario por ID (para perfiles públicos)
+exports.getById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const veterinario = await VeterinarioRepository.getById(id);
+    if (!veterinario) {
+      return ApiResponse.notFound("Veterinario no encontrado.", res);
+    }
+
+    return ApiResponse.success("Veterinario obtenido exitosamente.", { veterinario }, res);
+
+  } catch (error) {
+    console.error("Error en GET /veterinarios/:id:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
