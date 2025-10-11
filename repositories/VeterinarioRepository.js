@@ -6,7 +6,8 @@ class VeterinarioRepository {
             include: [
                 { 
                     model: Persona, 
-                    as: 'persona' 
+                    as: 'persona',
+                    attributes: { exclude: ['contrasena', 'codigo_verificacion', 'codigo_expiracion'] }
                 }
             ]
         });
@@ -17,7 +18,8 @@ class VeterinarioRepository {
             include: [
                 { 
                     model: Persona, 
-                    as: 'persona' 
+                    as: 'persona',
+                    attributes: { exclude: ['contrasena', 'codigo_verificacion', 'codigo_expiracion'] }
                 }
             ]
         });
