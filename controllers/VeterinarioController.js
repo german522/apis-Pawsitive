@@ -1,13 +1,17 @@
-const { PersonaRepository, VeterinarioRepository, ClienteRepository } = require('../repositories');
+const { PersonaRepository } = require('../repositories');
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
-const { ValidationError, DatabaseError } = require('sequelize');
-const { sequelize } = require('../models');
+const VerificationUtils = require('../utils/verification');
+const { enviarCodigoVerificacion } = require('../utils/emailService');
 
-// Registro de veterinario
+// Importamos el mismo mapa
+const { pendingVerifications } = require('./ClienteController');
+const { VeterinarioRepository, ClienteRepository } = require('../repositories');
+const { sequelize } = require('../models');
+const { ValidationError, DatabaseError } = require('sequelize');
+
+// Registro de veterinario (sin guardar en BD aún)
 exports.register = async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
   try {
     const { 
       nombre, 
@@ -21,97 +25,45 @@ exports.register = async (req, res) => {
       especialidad
     } = req.body;
 
-    // Validaciones básicas
     if (!nombre || !apellido_paterno || !correo || !contrasena || !cedula) {
-      await transaction.rollback();
       return ApiResponse.validation("Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena, cedula.", null, res);
     }
 
-    // Verificar si el correo ya existe
-    const existingPersona = await PersonaRepository.getByCorreo(correo.toLowerCase().trim());
-
-    // Si ya existe, no permitir registro duplicado (sin verificación)
+    const existingPersona = await PersonaRepository.getByCorreo(correo);
     if (existingPersona) {
-      if (transaction && !transaction.finished) await transaction.rollback();
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
-    // Verificar si la cédula ya existe
-    const existingVeterinario = await VeterinarioRepository.getByCedula(cedula);
-    if (existingVeterinario) {
-      await transaction.rollback();
-      return ApiResponse.conflict("La cédula profesional ya está registrada.", res);
-    }
-
-    // Hashear contraseña
     const hashedPassword = await AuthUtils.hashPassword(contrasena);
+    const codigoVerificacion = VerificationUtils.generateCode();
+    const codigoExpiracion = VerificationUtils.generateExpirationDate();
 
-    // Crear persona
-    const personaData = {
-      nombre: nombre.trim(),
-      apellido_paterno: apellido_paterno.trim(),
-      apellido_materno: apellido_materno?.trim() || null,
-      telefono: telefono?.trim() || null,
+    // Guardar temporalmente
+    pendingVerifications.set(correo, {
+      tipo: 'veterinario',
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      telefono,
       correo: correo.toLowerCase().trim(),
       contrasena: hashedPassword,
-      URL_imagen: URL_imagen?.trim() || null
-    };
+      URL_imagen,
+      cedula,
+      especialidad,
+      codigoVerificacion,
+      codigoExpiracion
+    });
 
-    const persona = await PersonaRepository.create(personaData);
+    await enviarCodigoVerificacion(correo, codigoVerificacion);
 
-    // Crear veterinario asociado
-    const veterinarioData = {
-      id_persona: persona.id,
-      cedula: cedula.trim(),
-      especialidad: especialidad?.trim() || null
-    };
-
-    const veterinario = await VeterinarioRepository.create(veterinarioData);
-
-    await transaction.commit();
-
-    // Generar tokens
-    const token = AuthUtils.generateToken(persona, 'veterinario', veterinario.id);
-    const refreshToken = AuthUtils.generateRefreshToken(persona);
-
-    const responseData = {
-      user: {
-        id: persona.id,
-        nombre: persona.nombre,
-        apellido_paterno: persona.apellido_paterno,
-        apellido_materno: persona.apellido_materno,
-        correo: persona.correo,
-        telefono: persona.telefono,
-        URL_imagen: persona.URL_imagen,
-        tipo: 'veterinario',
-        cedula: veterinario.cedula,
-        especialidad: veterinario.especialidad
-      },
-      tokens: {
-        accessToken: token,
-        refreshToken: refreshToken,
-        expiresIn: '24h'
-      }
-    };
-
-    return ApiResponse.success("Veterinario registrado exitosamente.", responseData, res, 201);
+    return ApiResponse.success(
+      "Código de verificación enviado. Valídalo para completar tu registro.",
+      { correo },
+      res
+    );
 
   } catch (error) {
-    try {
-      if (transaction && !transaction.finished) await transaction.rollback();
-    } catch (rbErr) {
-      console.warn('No se pudo hacer rollback (ya finalizada la transacción):', rbErr);
-    }
-    console.error("❌ Error en POST /veterinarios/register:", error);
-    
-    if (error instanceof ValidationError) {
-      return ApiResponse.validation(error.errors.map(e => e.message), null, res);
-    }
-
-    if (error instanceof DatabaseError) {
-      return ApiResponse.error("Error en la base de datos.", res);
-    }
-
+    console.error("Error en POST /veterinarios/register:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
