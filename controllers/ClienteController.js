@@ -3,9 +3,11 @@ const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 const { sequelize } = require('../models');
+const { enviarCodigoVerificacion } = require('../utils/emailService');
+const { usuario } = require('../models');
 // verification/email removed — registration will create persona+cliente immediately
 
-// Registro de cliente (sin verificación por correo)
+// Registro de cliente 
 exports.register = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
@@ -42,6 +44,16 @@ exports.register = async (req, res) => {
     };
 
     const cliente = await ClienteRepository.create(clienteData);
+
+    //validacion de correo
+    // validación de correo
+const codigo = Math.floor(100000 + Math.random() * 900000).toString(); // Código de 6 dígitos
+
+await persona.update({ codigo_verificacion: codigo }); // ← más eficiente y correcto
+
+
+    await enviarCodigoVerificacion(persona.correo, codigo);
+    // Fin validacion de correo
 
     await transaction.commit();
 

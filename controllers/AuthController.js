@@ -2,6 +2,7 @@ const { PersonaRepository, ClienteRepository, VeterinarioRepository } = require(
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
+const { usuario } = require('../models');
 
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
@@ -17,7 +18,17 @@ exports.login = async (req, res) => {
     if (!persona) {
       return ApiResponse.unauthorized("Credenciales incorrectas.", res);
     }
-
+    // verificar si el usuario esta confirmado en la tabla usuario
+    const usuarioDB = await usuario.findOne({ where: { correo: persona.correo } });
+    if (!usuarioDB){
+      return ApiResponse.unauthorized("Usuario no encontrado en el sistema.", res);
+    }
+    if (!usuarioDB.confirmado) {
+      return ApiResponse.unauthorized("Debes verificar tu correo antes de iniciar sesión.", res);
+    }
+    if (!usuarioDB.activo) {
+     return ApiResponse.unauthorized("Tu cuenta aún no está activa. Contacta al administrador.", res);
+} 
     // Verificar contraseña
     const passwordMatch = await AuthUtils.comparePassword(contrasena, persona.contrasena);
     if (!passwordMatch) {
@@ -142,8 +153,36 @@ exports.refreshToken = async (req, res) => {
     console.error("Error en POST /auth/refresh:", error);
     return ApiResponse.unauthorized("Refresh token inválido.", res);
   }
-};
-
+}; //vrificar codigo
 exports.verifyCode = async (req, res) => {
-  return ApiResponse.error('Verificación por código deshabilitada en este servidor.', res, 410);
+  try {
+    const { correo, codigo_verificacion } = req.body;
+
+    if (!correo || !codigo_verificacion) {
+      return ApiResponse.validation("Correo y código de verificación son requeridos.", null, res);
+    }
+
+    const persona = await PersonaRepository.getByCorreo(correo);
+
+    if (!persona) {
+      return ApiResponse.notFound("No se encontró una cuenta con ese correo.", res);
+    }
+
+    if (persona.codigo_verificacion !== codigo_verificacion) {
+      return ApiResponse.validation("El código de verificación es incorrecto.", null, res);
+    }
+
+    // Actualiza para marcar como verificado y limpiar códigos
+    await PersonaRepository.update(persona.id, {
+      verificado: true,
+      codigo_verificacion: null,
+      codigo_expiracion: null
+    });
+
+    return ApiResponse.success("Código verificado correctamente. Usuario activado.", null, res);
+
+  } catch (error) {
+    console.error("Error en POST /auth/verify-code:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
 };
