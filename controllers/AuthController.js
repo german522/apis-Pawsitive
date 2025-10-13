@@ -1,8 +1,79 @@
 const { PersonaRepository, ClienteRepository, VeterinarioRepository } = require('../repositories');
-const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
+const { sequelize } = require('../models');
+const { pendingVerifications } = require('./ClienteController');
+const AuthUtils = require('../utils/auth');
 const { ValidationError, DatabaseError } = require('sequelize');
-const { usuario } = require('../models');
+
+exports.verifyCode = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { correo, codigo_verificacion } = req.body;
+
+    if (!correo || !codigo_verificacion) {
+      return ApiResponse.validation("Correo y código de verificación son requeridos.", null, res);
+    }
+
+    const pendingData = pendingVerifications.get(correo);
+    if (!pendingData) {
+      return ApiResponse.notFound("No hay registro pendiente para este correo o ya fue verificado.", res);
+    }
+
+    if (pendingData.codigoVerificacion !== codigo_verificacion) {
+      return ApiResponse.validation("El código de verificación es incorrecto.", null, res);
+    }
+
+    if (new Date() > new Date(pendingData.codigoExpiracion)) {
+      pendingVerifications.delete(correo);
+      return ApiResponse.validation("El código de verificación ha expirado. Regístrate nuevamente.", null, res);
+    }
+
+    // Crear persona
+    const persona = await PersonaRepository.create({
+      nombre: pendingData.nombre.trim(),
+      apellido_paterno: pendingData.apellido_paterno.trim(),
+      apellido_materno: pendingData.apellido_materno?.trim() || null,
+      telefono: pendingData.telefono?.trim() || null,
+      correo: pendingData.correo,
+      contrasena: pendingData.contrasena,
+      URL_imagen: pendingData.URL_imagen?.trim() || null,
+      verificado: true,
+      codigo_verificacion: null,
+      codigo_expiracion: null
+    }, { transaction });
+
+    // Crear registro según tipo
+    if (pendingData.tipo === 'cliente') {
+      await ClienteRepository.create({
+        id_persona: persona.id,
+        fecha_registro: new Date()
+      }, { transaction });
+    } else if (pendingData.tipo === 'veterinario') {
+      await VeterinarioRepository.create({
+        id_persona: persona.id,
+        cedula: pendingData.cedula.trim(),
+        especialidad: pendingData.especialidad?.trim() || null
+      }, { transaction });
+    }
+
+    await transaction.commit();
+    pendingVerifications.delete(correo);
+
+    return ApiResponse.success(
+      "Cuenta verificada y registrada exitosamente. Ya puedes iniciar sesión.",
+      { correo: persona.correo },
+      res,
+      201
+    );
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error en POST /auth/verify-code:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};;
+
 
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
@@ -13,22 +84,17 @@ exports.login = async (req, res) => {
       return ApiResponse.validation("Correo y contraseña son requeridos.", null, res);
     }
 
-    // Buscar persona por correo
+    // Buscar persona por correo (asegúrate de incluir las asociaciones)
     const persona = await PersonaRepository.getByCorreo(correo);
     if (!persona) {
       return ApiResponse.unauthorized("Credenciales incorrectas.", res);
     }
-    // verificar si el usuario esta confirmado en la tabla usuario
-    const usuarioDB = await usuario.findOne({ where: { correo: persona.correo } });
-    if (!usuarioDB){
-      return ApiResponse.unauthorized("Usuario no encontrado en el sistema.", res);
-    }
-    if (!usuarioDB.confirmado) {
+
+    // Verificar si la cuenta está verificada
+    if (!persona.verificado) {
       return ApiResponse.unauthorized("Debes verificar tu correo antes de iniciar sesión.", res);
     }
-    if (!usuarioDB.activo) {
-     return ApiResponse.unauthorized("Tu cuenta aún no está activa. Contacta al administrador.", res);
-} 
+
     // Verificar contraseña
     const passwordMatch = await AuthUtils.comparePassword(contrasena, persona.contrasena);
     if (!passwordMatch) {
@@ -40,7 +106,7 @@ exports.login = async (req, res) => {
     let userTypeId = null;
     let additionalData = {};
 
-    // Verificar si es cliente
+    // Cliente
     if (persona.cliente) {
       userType = 'cliente';
       userTypeId = persona.cliente.id;
@@ -48,7 +114,7 @@ exports.login = async (req, res) => {
         fecha_registro: persona.cliente.fecha_registro
       };
     }
-    // Verificar si es veterinario
+    // Veterinario
     else if (persona.veterinario) {
       userType = 'veterinario';
       userTypeId = persona.veterinario.id;
@@ -56,8 +122,7 @@ exports.login = async (req, res) => {
         cedula: persona.veterinario.cedula,
         especialidad: persona.veterinario.especialidad
       };
-    }
-    else {
+    } else {
       return ApiResponse.unauthorized("Usuario no tiene un tipo válido asignado.", res);
     }
 
@@ -74,7 +139,8 @@ exports.login = async (req, res) => {
         correo: persona.correo,
         telefono: persona.telefono,
         URL_imagen: persona.URL_imagen,
-        tipo: userType
+        tipo: userType,
+        ...additionalData
       },
       tokens: {
         accessToken: token,
@@ -152,37 +218,5 @@ exports.refreshToken = async (req, res) => {
   } catch (error) {
     console.error("Error en POST /auth/refresh:", error);
     return ApiResponse.unauthorized("Refresh token inválido.", res);
-  }
-}; //vrificar codigo
-exports.verifyCode = async (req, res) => {
-  try {
-    const { correo, codigo_verificacion } = req.body;
-
-    if (!correo || !codigo_verificacion) {
-      return ApiResponse.validation("Correo y código de verificación son requeridos.", null, res);
-    }
-
-    const persona = await PersonaRepository.getByCorreo(correo);
-
-    if (!persona) {
-      return ApiResponse.notFound("No se encontró una cuenta con ese correo.", res);
-    }
-
-    if (persona.codigo_verificacion !== codigo_verificacion) {
-      return ApiResponse.validation("El código de verificación es incorrecto.", null, res);
-    }
-
-    // Actualiza para marcar como verificado y limpiar códigos
-    await PersonaRepository.update(persona.id, {
-      verificado: true,
-      codigo_verificacion: null,
-      codigo_expiracion: null
-    });
-
-    return ApiResponse.success("Código verificado correctamente. Usuario activado.", null, res);
-
-  } catch (error) {
-    console.error("Error en POST /auth/verify-code:", error);
-    return ApiResponse.error("Error interno del servidor.", res);
   }
 };
