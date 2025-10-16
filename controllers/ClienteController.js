@@ -1,27 +1,27 @@
-const { PersonaRepository } = require('../repositories');
+const { PersonaRepository, ClienteRepository } = require('../repositories');
+const { sequelize } = require('../models');
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const VerificationUtils = require('../utils/verification');
-const { enviarCodigoVerificacion } = require('../utils/emailService');
+const { enviarCorreoVerificacion } = require('../utils/emailService');
+const { ValidationError, DatabaseError } = require('sequelize');
 
 // Mapa temporal en memoria
 const pendingVerifications = new Map();
 
-// Registro de cliente (sin guardar en BD aún)
+// =========================
+// Registro de cliente
+// =========================
 exports.register = async (req, res) => {
   try {
-    const { 
-      nombre, 
-      apellido_paterno, 
-      apellido_materno, 
-      telefono, 
-      correo, 
-      contrasena,
-      URL_imagen 
-    } = req.body;
+    const { nombre, apellido_paterno, apellido_materno, telefono, correo, contrasena, URL_imagen } = req.body;
 
     if (!nombre || !apellido_paterno || !correo || !contrasena) {
-      return ApiResponse.validation("Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena.", null, res);
+      return ApiResponse.validation(
+        "Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena.",
+        null,
+        res
+      );
     }
 
     const existingPersona = await PersonaRepository.getByCorreo(correo);
@@ -48,8 +48,8 @@ exports.register = async (req, res) => {
       codigoExpiracion
     });
 
-    // Enviar correo
-    await enviarCodigoVerificacion(correo, codigoVerificacion);
+    // Enviar correo de verificación
+    await enviarCorreoVerificacion(correo, codigoVerificacion);
 
     return ApiResponse.success(
       "Código de verificación enviado. Valídalo para completar tu registro.",
@@ -63,11 +63,12 @@ exports.register = async (req, res) => {
   }
 };
 
-// Exportamos el mapa para usarlo también en verify-code
+// Exportamos el mapa
 exports.pendingVerifications = pendingVerifications;
 
-
-// Logout de cliente
+// =========================
+// Logout
+// =========================
 exports.logout = async (req, res) => {
   try {
     return ApiResponse.success("Logout exitoso. Token debe ser eliminado del cliente.", null, res);
@@ -77,35 +78,31 @@ exports.logout = async (req, res) => {
   }
 };
 
-// Eliminar cuenta de cliente
+// =========================
+// Eliminar cuenta
+// =========================
 exports.deleteAccount = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
   try {
-    const clienteId = req.user.tipoId; // ID del cliente desde el token
-    const personaId = req.user.id; // ID de la persona desde el token
+    const clienteId = req.user.tipoId;
+    const personaId = req.user.id;
 
-    // Verificar que el cliente existe
     const cliente = await ClienteRepository.getById(clienteId);
     if (!cliente) {
       await transaction.rollback();
       return ApiResponse.notFound("Cliente no encontrado.", res);
     }
 
-    // Eliminar cliente (esto eliminará las mascotas por CASCADE)
     await ClienteRepository.deleteCliente(clienteId, transaction);
-    
-    // Eliminar persona
     await PersonaRepository.deletePersona(personaId, transaction);
 
     await transaction.commit();
 
     return ApiResponse.success("Cuenta eliminada exitosamente.", null, res);
-
   } catch (error) {
     await transaction.rollback();
     console.error("Error en DELETE /clientes/account:", error);
-    
+
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
@@ -114,25 +111,26 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
-// Obtener perfil del cliente
+// =========================
+// Obtener perfil
+// =========================
 exports.getProfile = async (req, res) => {
   try {
     const clienteId = req.user.tipoId;
-    
     const cliente = await ClienteRepository.getById(clienteId);
     if (!cliente) {
       return ApiResponse.notFound("Cliente no encontrado.", res);
     }
-
     return ApiResponse.success("Perfil obtenido exitosamente.", { cliente }, res);
-
   } catch (error) {
     console.error("Error en GET /clientes/profile:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Actualizar perfil del cliente
+// =========================
+// Actualizar perfil
+// =========================
 exports.updateProfile = async (req, res) => {
   try {
     const personaId = req.user.id;
@@ -159,7 +157,7 @@ exports.updateProfile = async (req, res) => {
 
   } catch (error) {
     console.error("Error en PUT /clientes/profile:", error);
-    
+
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
