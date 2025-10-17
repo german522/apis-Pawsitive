@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const MascotaController = require("../controllers/MascotaController");
 const { authenticateToken, requireCliente, requireVeterinario } = require("../middlewares/auth");
+const { uploadMascota } = require("../config/cloudinary");
 
 // Rutas accesibles para veterinarios (pueden ver todas las mascotas)
 router.get("/", authenticateToken, requireVeterinario, MascotaController.getAll);
@@ -20,5 +21,7 @@ router.get("/especie/:especie", authenticateToken, MascotaController.getByEspeci
 
 // Rutas para historial de vacunas
 router.get("/:id/vacunas", authenticateToken, MascotaController.getHistorialVacunas);
+
+router.post("/:id/subir-imagen", authenticateToken, uploadMascota.single('imagen'), MascotaController.subirImagen);
 
 module.exports = router;
