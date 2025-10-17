@@ -71,6 +71,20 @@ class PersonaRepository {
             ]
         });
     }
+
+    async subirImagenPersona(personaId, imageUrl) {
+        try {
+            const persona = await Persona.findByPk(personaId);
+            if (!persona) {
+                throw new Error('Persona no encontrada');
+            }
+            await persona.update({ URL_imagen: imageUrl });
+            return { url: imageUrl };
+        } catch (error) {
+            console.error("Error al actualizar imagen de persona:", error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new PersonaRepository();

@@ -116,6 +116,20 @@ class MascotaRepository {
             order: [['fecha_aplicacion', 'DESC']]
         });
     }
+
+    async subirImagenMascota(mascotaId, imageUrl) {
+        try {
+            const mascota = await Mascota.findByPk(mascotaId);
+            if (!mascota) {
+                throw new Error('Mascota no encontrada');
+            }
+            await mascota.update({ URL_imagen: imageUrl });
+            return { url: imageUrl };
+        } catch (error) {
+            console.error("Error al actualizar imagen de mascota:", error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new MascotaRepository();
