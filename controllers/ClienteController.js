@@ -9,12 +9,19 @@ const { ValidationError, DatabaseError } = require('sequelize');
 // Mapa temporal en memoria
 const pendingVerifications = new Map();
 
-// =========================
-// Registro de cliente
-// =========================
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60s
+
 exports.register = async (req, res) => {
   try {
-    const { nombre, apellido_paterno, apellido_materno, telefono, correo, contrasena, URL_imagen } = req.body;
+    const {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      telefono,
+      correo,
+      contrasena,
+      URL_imagen
+    } = req.body;
 
     if (!nombre || !apellido_paterno || !correo || !contrasena) {
       return ApiResponse.validation(
@@ -24,46 +31,74 @@ exports.register = async (req, res) => {
       );
     }
 
-    const existingPersona = await PersonaRepository.getByCorreo(correo);
+    // Normalizar correo
+    const email = String(correo).toLowerCase().trim();
+
+    // ¿Ya existe?
+    const existingPersona = await PersonaRepository.getByCorreo(email);
     if (existingPersona) {
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
-    // Hashear contraseña y generar código
-    const hashedPassword = await AuthUtils.hashPassword(contrasena);
-    const codigoVerificacion = VerificationUtils.generateCode();
-    const codigoExpiracion = VerificationUtils.generateExpirationDate();
+    // Verificar cooldown si ya hay un pending
+    const existingPending = pendingVerifications.get(email);
+    const now = Date.now();
+    if (existingPending?.lastSentAt && (now - existingPending.lastSentAt) < RESEND_COOLDOWN_MS) {
+      const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - existingPending.lastSentAt)) / 1000);
+      return ApiResponse.tooManyRequests(
+        `Espera ${wait}s para solicitar un nuevo código.`,
+        res
+      );
+    }
 
-    // Guardar temporalmente
-    pendingVerifications.set(correo, {
+    // Hash de contraseña + generación de código/expiración
+    const hashedPassword = await AuthUtils.hashPassword(contrasena);
+    const codigoVerificacion = VerificationUtils.generateCode();        // ej. 6 dígitos
+    const codigoExpiracion = VerificationUtils.generateExpirationDate(); // ej. now + 15 min
+
+    // Guardar temporalmente (en memoria) los datos del registro
+    pendingVerifications.set(email, {
       tipo: 'cliente',
       nombre,
       apellido_paterno,
       apellido_materno,
       telefono,
-      correo: correo.toLowerCase().trim(),
+      correo: email,
       contrasena: hashedPassword,
       URL_imagen,
-      codigoVerificacion,
-      codigoExpiracion
+      codigoHash: null,          // si luego decides hashear el código
+      codigoPlano: codigoVerificacion, // si mantienes plano temporalmente
+      codigoExpiracion,
+      attempts: 0,
+      lastSentAt: now
     });
 
-    // Enviar correo de verificación
-    await enviarCorreoVerificacion(correo, codigoVerificacion);
+    // Enviar correo de verificación (Resend, API HTTP)
+    await enviarCorreoVerificacion({
+      to: email,
+      code: codigoVerificacion,
+      idempotencyKey: `register:${email}:${new Date().toISOString()}`
+    });
 
     return ApiResponse.success(
       "Código de verificación enviado. Valídalo para completar tu registro.",
-      { correo },
+      { correo: email },
       res
     );
 
   } catch (error) {
     console.error("Error en POST /clientes/register:", error);
+    // Limpia el pending si falló el envío para no dejar estados colgados
+    if (req?.body?.correo) {
+      const email = String(req.body.correo).toLowerCase().trim();
+      const p = pendingVerifications.get(email);
+      if (p && !p.emailVerificado) pendingVerifications.delete(email);
+    }
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Exportamos el mapa
+// Export del mapa (si lo manejas aquí)
 exports.pendingVerifications = pendingVerifications;
 
 // =========================
