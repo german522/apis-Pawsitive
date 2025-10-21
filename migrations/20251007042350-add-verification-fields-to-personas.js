@@ -7,7 +7,7 @@ module.exports = {
       allowNull: false,
       defaultValue: false
     });
-
+    
     await queryInterface.addColumn('personas', 'codigo_verificacion', {
       type: Sequelize.STRING(6),
       allowNull: true
