@@ -1,73 +1,109 @@
-const { PersonaRepository } = require('../repositories');
+const { PersonaRepository, ClienteRepository } = require('../repositories');
+const { sequelize } = require('../models');
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const VerificationUtils = require('../utils/verification');
-const { enviarCodigoVerificacion } = require('../utils/emailService');
+const { enviarCorreoVerificacion } = require('../utils/emailService');
+const { ValidationError, DatabaseError } = require('sequelize');
 
 // Mapa temporal en memoria
 const pendingVerifications = new Map();
 
-// Registro de cliente (sin guardar en BD aún)
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60s
+
 exports.register = async (req, res) => {
   try {
-    const { 
-      nombre, 
-      apellido_paterno, 
-      apellido_materno, 
-      telefono, 
-      correo, 
+    const {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      telefono,
+      correo,
       contrasena,
-      URL_imagen 
+      URL_imagen
     } = req.body;
 
     if (!nombre || !apellido_paterno || !correo || !contrasena) {
-      return ApiResponse.validation("Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena.", null, res);
+      return ApiResponse.validation(
+        "Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena.",
+        null,
+        res
+      );
     }
 
-    const existingPersona = await PersonaRepository.getByCorreo(correo);
+    // Normalizar correo
+    const email = String(correo).toLowerCase().trim();
+
+    // ¿Ya existe?
+    const existingPersona = await PersonaRepository.getByCorreo(email);
     if (existingPersona) {
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
-    // Hashear contraseña y generar código
-    const hashedPassword = await AuthUtils.hashPassword(contrasena);
-    const codigoVerificacion = VerificationUtils.generateCode();
-    const codigoExpiracion = VerificationUtils.generateExpirationDate();
+    // Verificar cooldown si ya hay un pending
+    const existingPending = pendingVerifications.get(email);
+    const now = Date.now();
+    if (existingPending?.lastSentAt && (now - existingPending.lastSentAt) < RESEND_COOLDOWN_MS) {
+      const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - existingPending.lastSentAt)) / 1000);
+      return ApiResponse.tooManyRequests(
+        `Espera ${wait}s para solicitar un nuevo código.`,
+        res
+      );
+    }
 
-    // Guardar temporalmente
-    pendingVerifications.set(correo, {
+    // Hash de contraseña + generación de código/expiración
+    const hashedPassword = await AuthUtils.hashPassword(contrasena);
+    const codigoVerificacion = VerificationUtils.generateCode();        // ej. 6 dígitos
+    const codigoExpiracion = VerificationUtils.generateExpirationDate(); // ej. now + 15 min
+
+    // Guardar temporalmente (en memoria) los datos del registro
+    pendingVerifications.set(email, {
       tipo: 'cliente',
       nombre,
       apellido_paterno,
       apellido_materno,
       telefono,
-      correo: correo.toLowerCase().trim(),
+      correo: email,
       contrasena: hashedPassword,
       URL_imagen,
-      codigoVerificacion,
-      codigoExpiracion
+      codigoHash: null,          // si luego decides hashear el código
+      codigoPlano: codigoVerificacion, // si mantienes plano temporalmente
+      codigoExpiracion,
+      attempts: 0,
+      lastSentAt: now
     });
 
-    // Enviar correo
-    await enviarCodigoVerificacion(correo, codigoVerificacion);
+    // Enviar correo de verificación (Resend, API HTTP)
+    await enviarCorreoVerificacion({
+      to: email,
+      code: codigoVerificacion,
+      idempotencyKey: `register:${email}:${new Date().toISOString()}`
+    });
 
     return ApiResponse.success(
       "Código de verificación enviado. Valídalo para completar tu registro.",
-      { correo },
+      { correo: email },
       res
     );
 
   } catch (error) {
     console.error("Error en POST /clientes/register:", error);
+    // Limpia el pending si falló el envío para no dejar estados colgados
+    if (req?.body?.correo) {
+      const email = String(req.body.correo).toLowerCase().trim();
+      const p = pendingVerifications.get(email);
+      if (p && !p.emailVerificado) pendingVerifications.delete(email);
+    }
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Exportamos el mapa para usarlo también en verify-code
+// Export del mapa (si lo manejas aquí)
 exports.pendingVerifications = pendingVerifications;
 
-
-// Logout de cliente
+// =========================
+// Logout
+// =========================
 exports.logout = async (req, res) => {
   try {
     return ApiResponse.success("Logout exitoso. Token debe ser eliminado del cliente.", null, res);
@@ -77,35 +113,31 @@ exports.logout = async (req, res) => {
   }
 };
 
-// Eliminar cuenta de cliente
+// =========================
+// Eliminar cuenta
+// =========================
 exports.deleteAccount = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
   try {
-    const clienteId = req.user.tipoId; // ID del cliente desde el token
-    const personaId = req.user.id; // ID de la persona desde el token
+    const clienteId = req.user.tipoId;
+    const personaId = req.user.id;
 
-    // Verificar que el cliente existe
     const cliente = await ClienteRepository.getById(clienteId);
     if (!cliente) {
       await transaction.rollback();
       return ApiResponse.notFound("Cliente no encontrado.", res);
     }
 
-    // Eliminar cliente (esto eliminará las mascotas por CASCADE)
     await ClienteRepository.deleteCliente(clienteId, transaction);
-    
-    // Eliminar persona
     await PersonaRepository.deletePersona(personaId, transaction);
 
     await transaction.commit();
 
     return ApiResponse.success("Cuenta eliminada exitosamente.", null, res);
-
   } catch (error) {
     await transaction.rollback();
     console.error("Error en DELETE /clientes/account:", error);
-    
+
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
@@ -114,25 +146,26 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
-// Obtener perfil del cliente
+// =========================
+// Obtener perfil
+// =========================
 exports.getProfile = async (req, res) => {
   try {
     const clienteId = req.user.tipoId;
-    
     const cliente = await ClienteRepository.getById(clienteId);
     if (!cliente) {
       return ApiResponse.notFound("Cliente no encontrado.", res);
     }
-
     return ApiResponse.success("Perfil obtenido exitosamente.", { cliente }, res);
-
   } catch (error) {
     console.error("Error en GET /clientes/profile:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Actualizar perfil del cliente
+// =========================
+// Actualizar perfil
+// =========================
 exports.updateProfile = async (req, res) => {
   try {
     const personaId = req.user.id;
@@ -159,7 +192,7 @@ exports.updateProfile = async (req, res) => {
 
   } catch (error) {
     console.error("Error en PUT /clientes/profile:", error);
-    
+
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
@@ -168,6 +201,26 @@ exports.updateProfile = async (req, res) => {
       return ApiResponse.error("Error en la base de datos.", res);
     }
 
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
+
+exports.subirImagen = async (req, res) => {
+  try {
+    const file = req.file;
+    const personaId = req.user.id;
+
+    if (!file) {
+      return ApiResponse.validation('No se ha proporcionado una imagen.', null, res);
+    }
+
+    // file.path contiene la URL de Cloudinary
+    const resultado = await PersonaRepository.subirImagenPersona(personaId, file.path);
+
+    return ApiResponse.success('Imagen subida correctamente.', { url: resultado.url }, res);
+
+  } catch (error) {
+    console.error("❌ Error al subir imagen:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
