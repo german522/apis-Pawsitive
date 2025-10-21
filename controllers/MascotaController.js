@@ -231,3 +231,34 @@ exports.getMascotasCliente = async (req, res) => {
       return ApiResponse.error("Error interno del servidor.", res);
     }
   };
+
+  exports.subirImagen = async (req, res) => {
+  try {
+    const file = req.file;
+    const { id } = req.params;
+
+    if (!file) {
+      return ApiResponse.validation('No se ha proporcionado una imagen.', null, res);
+    }
+
+    // Verificar que la mascota existe
+    const mascota = await MascotaRepository.getById(id);
+    if (!mascota) {
+      return ApiResponse.notFound("Mascota no encontrada.", res);
+    }
+
+    // Verificar permisos (cliente solo puede subir imágenes de sus mascotas)
+    if (req.user.tipo === 'cliente' && mascota.id_cliente !== req.user.tipoId) {
+      return ApiResponse.forbidden("No tienes permiso para modificar esta mascota.", res);
+    }
+
+    // file.path contiene la URL de Cloudinary
+    const resultado = await MascotaRepository.subirImagenMascota(id, file.path);
+
+    return ApiResponse.success('Imagen de mascota subida correctamente.', { url: resultado.url }, res);
+
+  } catch (error) {
+    console.error("Error al subir imagen:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
