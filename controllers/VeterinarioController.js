@@ -276,3 +276,23 @@ exports.getById = async (req, res) => {
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
+
+exports.subirImagen = async (req, res) => {
+  try {
+    const file = req.file;
+    const personaId = req.user.id;
+
+    if (!file) {
+      return ApiResponse.validation('No se ha proporcionado una imagen.', null, res);
+    }
+
+    // file.path contiene la URL de Cloudinary
+    const resultado = await PersonaRepository.subirImagenPersona(personaId, file.path);
+
+    return ApiResponse.success('Imagen subida correctamente.', { url: resultado.url }, res);
+
+  } catch (error) {
+    console.error("Error al subir imagen:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
