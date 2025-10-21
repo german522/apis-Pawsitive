@@ -5,60 +5,98 @@ const { pendingVerifications } = require('./ClienteController');
 const AuthUtils = require('../utils/auth');
 const { ValidationError, DatabaseError } = require('sequelize');
 
+const MAX_ATTEMPTS = 5;
+
 exports.verifyCode = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
   try {
     const { correo, codigo_verificacion } = req.body;
 
     if (!correo || !codigo_verificacion) {
-      return ApiResponse.validation("Correo y código de verificación son requeridos.", null, res);
+      return ApiResponse.validation(
+        "Correo y código de verificación son requeridos.",
+        null,
+        res
+      );
     }
 
-    const pendingData = pendingVerifications.get(correo);
-    if (!pendingData) {
-      return ApiResponse.notFound("No hay registro pendiente para este correo o ya fue verificado.", res);
+    const email = String(correo).toLowerCase().trim();
+    const pending = pendingVerifications.get(email);
+
+    if (!pending) {
+      return ApiResponse.notFound(
+        "No hay registro pendiente para este correo o ya fue verificado.",
+        res
+      );
     }
 
-    if (pendingData.codigoVerificacion !== codigo_verificacion) {
-      return ApiResponse.validation("El código de verificación es incorrecto.", null, res);
+    // Control de intentos
+    pending.attempts = pending.attempts || 0;
+    if (pending.attempts >= MAX_ATTEMPTS) {
+      pendingVerifications.delete(email);
+      return ApiResponse.validation(
+        "Se excedió el número de intentos de verificación. Inicia el registro nuevamente.",
+        null,
+        res
+      );
     }
 
-    if (new Date() > new Date(pendingData.codigoExpiracion)) {
-      pendingVerifications.delete(correo);
-      return ApiResponse.validation("El código de verificación ha expirado. Regístrate nuevamente.", null, res);
+    // Verificar expiración
+    const now = new Date();
+    const exp = new Date(pending.codigoExpiracion);
+    if (now > exp) {
+      pendingVerifications.delete(email);
+      return ApiResponse.validation(
+        "El código de verificación ha expirado. Regístrate nuevamente.",
+        null,
+        res
+      );
     }
 
-    // Crear persona
+    // Comparación directa (sin hash)
+    const codeOk =
+      pending.codigoVerificacion === codigo_verificacion ||
+      pending.codigoPlano === codigo_verificacion;
+
+    if (!codeOk) {
+      pending.attempts += 1;
+      pendingVerifications.set(email, pending);
+      return ApiResponse.validation(
+        "El código de verificación es incorrecto.",
+        { intentos_restantes: Math.max(0, MAX_ATTEMPTS - pending.attempts) },
+        res
+      );
+    }
+
+    // === Crear Persona y rol ===
     const persona = await PersonaRepository.create({
-      nombre: pendingData.nombre.trim(),
-      apellido_paterno: pendingData.apellido_paterno.trim(),
-      apellido_materno: pendingData.apellido_materno?.trim() || null,
-      telefono: pendingData.telefono?.trim() || null,
-      correo: pendingData.correo,
-      contrasena: pendingData.contrasena,
-      URL_imagen: pendingData.URL_imagen?.trim() || null,
+      nombre: pending.nombre.trim(),
+      apellido_paterno: pending.apellido_paterno.trim(),
+      apellido_materno: pending.apellido_materno?.trim() || null,
+      telefono: pending.telefono?.trim() || null,
+      correo: pending.correo,
+      contrasena: pending.contrasena,
+      URL_imagen: pending.URL_imagen?.trim() || null,
       verificado: true,
       codigo_verificacion: null,
       codigo_expiracion: null
     }, { transaction });
 
-    // Crear registro según tipo
-    if (pendingData.tipo === 'cliente') {
+    if (pending.tipo === 'cliente') {
       await ClienteRepository.create({
         id_persona: persona.id,
         fecha_registro: new Date()
       }, { transaction });
-    } else if (pendingData.tipo === 'veterinario') {
+    } else if (pending.tipo === 'veterinario') {
       await VeterinarioRepository.create({
         id_persona: persona.id,
-        cedula: pendingData.cedula.trim(),
-        especialidad: pendingData.especialidad?.trim() || null
+        cedula: pending.cedula?.trim(),
+        especialidad: pending.especialidad?.trim() || null
       }, { transaction });
     }
 
     await transaction.commit();
-    pendingVerifications.delete(correo);
+    pendingVerifications.delete(email);
 
     return ApiResponse.success(
       "Cuenta verificada y registrada exitosamente. Ya puedes iniciar sesión.",
@@ -72,8 +110,7 @@ exports.verifyCode = async (req, res) => {
     console.error("Error en POST /auth/verify-code:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
-};;
-
+};
 
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
@@ -139,8 +176,7 @@ exports.login = async (req, res) => {
         correo: persona.correo,
         telefono: persona.telefono,
         URL_imagen: persona.URL_imagen,
-        tipo: userType,
-        ...additionalData
+        tipo: userType
       },
       tokens: {
         accessToken: token,
