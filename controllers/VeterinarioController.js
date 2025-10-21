@@ -1,24 +1,22 @@
-const { PersonaRepository } = require('../repositories');
+const { PersonaRepository, VeterinarioRepository, ClienteRepository } = require('../repositories');
 const AuthUtils = require('../utils/auth');
 const ApiResponse = require('../utils/ApiResponse');
 const VerificationUtils = require('../utils/verification');
-const { enviarCodigoVerificacion } = require('../utils/emailService');
-
-// Importamos el mismo mapa
+const { enviarCorreoVerificacion } = require('../utils/emailService');
 const { pendingVerifications } = require('./ClienteController');
-const { VeterinarioRepository, ClienteRepository } = require('../repositories');
 const { sequelize } = require('../models');
 const { ValidationError, DatabaseError } = require('sequelize');
 
-// Registro de veterinario (sin guardar en BD aún)
+const RESEND_COOLDOWN_MS = 60 * 1000;
+
 exports.register = async (req, res) => {
   try {
-    const { 
-      nombre, 
-      apellido_paterno, 
-      apellido_materno, 
-      telefono, 
-      correo, 
+    const {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      telefono,
+      correo,
       contrasena,
       URL_imagen,
       cedula,
@@ -26,44 +24,67 @@ exports.register = async (req, res) => {
     } = req.body;
 
     if (!nombre || !apellido_paterno || !correo || !contrasena || !cedula) {
-      return ApiResponse.validation("Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena, cedula.", null, res);
+      return ApiResponse.validation(
+        "Faltan campos obligatorios: nombre, apellido_paterno, correo, contrasena, cedula.",
+        null,
+        res
+      );
     }
 
-    const existingPersona = await PersonaRepository.getByCorreo(correo);
+    const email = String(correo).toLowerCase().trim();
+
+    const existingPersona = await PersonaRepository.getByCorreo(email);
     if (existingPersona) {
       return ApiResponse.conflict("El correo electrónico ya está registrado.", res);
     }
 
-    const hashedPassword = await AuthUtils.hashPassword(contrasena);
-    const codigoVerificacion = VerificationUtils.generateCode();
-    const codigoExpiracion = VerificationUtils.generateExpirationDate();
+    const existingPending = pendingVerifications.get(email);
+    const now = Date.now();
+    if (existingPending?.lastSentAt && (now - existingPending.lastSentAt) < RESEND_COOLDOWN_MS) {
+      const wait = Math.ceil((RESEND_COOLDOWN_MS - (now - existingPending.lastSentAt)) / 1000);
+      return ApiResponse.tooManyRequests(`Espera ${wait}s para solicitar un nuevo código.`, res);
+    }
 
-    // Guardar temporalmente
-    pendingVerifications.set(correo, {
+    const hashedPassword = await AuthUtils.hashPassword(contrasena);
+    const codigoVerificacion = VerificationUtils.generateCode(); 
+    const codigoExpiracion = VerificationUtils.generateExpirationDate(); 
+
+    pendingVerifications.set(email, {
       tipo: 'veterinario',
-      nombre,
-      apellido_paterno,
-      apellido_materno,
-      telefono,
-      correo: correo.toLowerCase().trim(),
+      nombre: nombre?.trim(),
+      apellido_paterno: apellido_paterno?.trim(),
+      apellido_materno: apellido_materno?.trim() || null,
+      telefono: telefono?.trim() || null,
+      correo: email,
       contrasena: hashedPassword,
-      URL_imagen,
-      cedula,
-      especialidad,
-      codigoVerificacion,
-      codigoExpiracion
+      URL_imagen: URL_imagen?.trim() || null,
+      cedula: cedula?.trim(),
+      especialidad: especialidad?.trim() || null,
+      codigoVerificacion, 
+      codigoExpiracion,
+      attempts: 0,
+      lastSentAt: now
     });
 
-    await enviarCodigoVerificacion(correo, codigoVerificacion);
+    await enviarCorreoVerificacion({
+      to: email,
+      code: codigoVerificacion,
+      idempotencyKey: `registerVet:${email}:${new Date().toISOString()}`
+    });
 
     return ApiResponse.success(
       "Código de verificación enviado. Valídalo para completar tu registro.",
-      { correo },
+      { correo: email },
       res
     );
 
   } catch (error) {
     console.error("Error en POST /veterinarios/register:", error);
+    if (req?.body?.correo) {
+      const email = String(req.body.correo).toLowerCase().trim();
+      const p = pendingVerifications.get(email);
+      if (p && !p.emailVerificado) pendingVerifications.delete(email);
+    }
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
@@ -252,6 +273,26 @@ exports.getById = async (req, res) => {
 
   } catch (error) {
     console.error("Error en GET /veterinarios/:id:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
+
+exports.subirImagen = async (req, res) => {
+  try {
+    const file = req.file;
+    const personaId = req.user.id;
+
+    if (!file) {
+      return ApiResponse.validation('No se ha proporcionado una imagen.', null, res);
+    }
+
+    // file.path contiene la URL de Cloudinary
+    const resultado = await PersonaRepository.subirImagenPersona(personaId, file.path);
+
+    return ApiResponse.success('Imagen subida correctamente.', { url: resultado.url }, res);
+
+  } catch (error) {
+    console.error("Error al subir imagen:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
