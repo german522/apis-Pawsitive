@@ -1,49 +1,59 @@
 const { Cita, Mascota, Persona, Veterinario, Cliente } = require('../models');
+// 💡 NOTA: Asumo que en tu archivo de modelos tienes definidas todas las asociaciones correctamente.
 
 const CitaController = {
   // 📅 Listar citas (filtra según el rol del usuario autenticado)
   listarCitas: async (req, res) => {
-    try {
-      const { user } = req;
-      let filtro = {};
+  try {
+    const { user } = req;
+    let filtro = {};
 
-      if (user.tipo === 'cliente') filtro.id_cliente = user.id;
-      if (user.tipo === 'veterinario') filtro.id_veterinario = user.id;
+    if (user.tipo === 'cliente') filtro.id_cliente = user.id;
+    if (user.tipo === 'veterinario') filtro.id_veterinario = user.id;
 
-      const citas = await Cita.findAll({
-        where: filtro,
-        include: [
-          { model: Mascota },
-        //  { model: Persona, as: 'cliente', attributes: ['nombre', 'correo'] },
-          { model: Veterinario, attributes: ['nombre'] }
-        ],
-        order: [['fecha', 'ASC'], ['hora', 'ASC']]
-      });
+    const citas = await Cita.findAll({
+      where: filtro,
+      include: [
+        { model: Mascota },
+        { model: Persona, as: 'cliente', attributes: ['nombre', 'correo'] },
+        { 
+          model: Veterinario,
+          include: { 
+            model: Persona, 
+            as: 'persona',   // ✅ usar el alias definido en el modelo
+            attributes: ['nombre'] 
+          }
+        }
+      ],
+      order: [['fecha', 'ASC'], ['hora', 'ASC']]
+    });
 
-      res.json(citas);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+    res.json(citas);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+},
+
 
   // 🕒 Agendar una cita
   agendarCita: async (req, res) => {
     try {
       const { fecha, hora, motivo, id_mascota, id_veterinario } = req.body;
 
-      // Buscar la mascota y su cliente
+      // Buscar la mascota y su cliente (usando el alias 'cliente' en el include)
       const mascota = await Mascota.findOne({
         where: { id: id_mascota },
-        include: { model: Cliente }
+        include: { model: Cliente, as: 'cliente' }
       });
 
       if (!mascota) {
         return res.status(404).json({ message: 'Mascota no encontrada' });
       }
 
-      // Validar que el cliente logueado sea el dueño
-      if (mascota.Cliente.id !== req.user.id) {
-        return res.status(403).json({ message: 'No puedes agendar citas para esta mascota' });
+      if (!mascota.cliente || mascota.cliente.id !== req.user.id) {
+        return res.status(403).json({ 
+          message: 'No puedes agendar citas para esta mascota (o no eres el dueño).' 
+        });
       }
 
       // Verificar si ya existe una cita en ese horario
@@ -78,7 +88,7 @@ const CitaController = {
 
   // ❌ Cancelar una cita
   cancelarCita: async (req, res) => {
-    try {
+    try { 
       const { id } = req.params;
       const cita = await Cita.findByPk(id);
 
@@ -86,9 +96,12 @@ const CitaController = {
         return res.status(404).json({ message: 'Cita no encontrada' });
       }
 
-      // Solo el cliente dueño o el veterinario pueden cancelar
-      if (req.user.tipo === 'cliente' && cita.id_cliente !== req.user.id) {
-        return res.status(403).json({ message: 'No puedes cancelar esta cita' });
+      if (req.user.tipo === 'cliente') {
+        const cliente = await Cliente.findOne({ where: { id_persona: req.user.id } });
+
+        if (!cliente || cita.id_cliente !== cliente.id) {
+          return res.status(403).json({ message: 'No puedes cancelar esta cita' });
+        }
       }
 
       cita.estado = 'Cancelada';
@@ -100,6 +113,7 @@ const CitaController = {
         cita
       });
     } catch (error) {
+      console.error('Error al cancelar cita:', error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -113,17 +127,23 @@ const CitaController = {
         return res.status(400).json({ message: 'Fecha, veterinario y mascota son requeridos' });
       }
 
-      // Buscar la mascota y su cliente
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (fecha < hoy) {
+        return res.status(400).json({ message: 'No se pueden consultar horarios para una fecha pasada' });
+      }
+
       const mascota = await Mascota.findOne({
         where: { id: id_mascota },
-        include: { model: Cliente }
+        include: { model: Cliente, as: 'cliente' }
       });
 
       if (!mascota) return res.status(404).json({ message: 'Mascota no encontrada' });
-      if (mascota.Cliente.id !== req.user.id) 
-          return res.status(403).json({ message: 'No puedes ver horarios de esta mascota' });
 
-      // Horario laboral: 9:00 a 17:00
+      if (!mascota.cliente || mascota.cliente.id !== req.user.id) 
+        return res.status(403).json({ 
+          message: 'No puedes ver horarios de esta mascota (o no tiene dueño asignado)' 
+        });
+
       const horarioInicio = 9;
       const horarioFin = 17;
       const todosHorarios = [];
@@ -132,7 +152,6 @@ const CitaController = {
         todosHorarios.push(`${h.toString().padStart(2, '0')}:00`);
       }
 
-      // Buscar citas ocupadas
       const citas = await Cita.findAll({
         where: { fecha, id_veterinario, estado: 'Agendada' },
         attributes: ['hora']
