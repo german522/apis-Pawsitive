@@ -1,4 +1,46 @@
 const { Cita, Mascota, Persona, Veterinario, Cliente } = require('../models');
+const { enviarCorreoCitaAgendada, enviarCorreoCitaCancelada } = require('../utils/emailService');
+
+async function cargarCitaConDatosCorreo(idCita, overrides = {}) {
+  const cita = await Cita.findByPk(idCita, {
+    include: [
+      { model: Mascota, attributes: ['id', 'nombre'] },
+      { model: Persona, as: 'cliente', attributes: ['nombre', 'apellido_paterno', 'apellido_materno', 'correo'] },
+      { 
+        model: Veterinario,
+        include: [{ model: Persona, as: 'persona', attributes: ['nombre', 'apellido_paterno', 'apellido_materno', 'correo'] }]
+      }
+    ]
+  });
+  if (!cita) return null;
+
+  // Nombres
+  const clienteNombre = [cita.cliente?.nombre, cita.cliente?.apellido_paterno, cita.cliente?.apellido_materno].filter(Boolean).join(' ');
+  const veterinarioNombre = [cita.Veterinario?.persona?.nombre, cita.Veterinario?.persona?.apellido_paterno, cita.Veterinario?.persona?.apellido_materno].filter(Boolean).join(' ');
+
+  // Fecha/hora formateadas
+  const dt = new Date(`${cita.fecha}T${cita.hora}`);
+  const fecha = dt.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  const hora  = dt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+  // Mascota (con overrides y fallback a query si viene vacío)
+  let mascotaNombre = overrides.mascotaNombre ?? cita.Mascota?.nombre ?? '';
+  if (!mascotaNombre) {
+    const m = await Mascota.findByPk(cita.id_mascota, { attributes: ['nombre'] });
+    mascotaNombre = m?.nombre ?? '';
+  }
+
+  return {
+    toCliente: cita.cliente?.correo || null,
+    toVeterinario: cita.Veterinario?.persona?.correo || null,
+    clienteNombre,
+    veterinarioNombre,
+    mascotaNombre,
+    fecha,
+    hora,
+    motivo: cita.motivo || ''
+  };
+}
 
 const CitaController = {
   listarCitas: async (req, res) => {
@@ -88,33 +130,35 @@ const CitaController = {
         where: { id: id_mascota },
         include: { model: Cliente, as: 'cliente' }
       });
-
       if (!mascota) {
         return res.status(404).json({ message: 'Mascota no encontrada' });
       }
-
       if (!mascota.cliente || mascota.cliente.id !== req.user.tipoId) {
-  return res.status(403).json({ 
-    message: 'No puedes agendar citas para esta mascota (o no eres el dueño).' 
-  });
-}
-
+        return res.status(403).json({ message: 'No puedes agendar citas para esta mascota (o no eres el dueño).' });
+      }
       const existeCita = await Cita.findOne({
         where: { fecha, hora, id_veterinario, estado: 'Agendada' }
       });
-
       if (existeCita) {
         return res.status(400).json({ message: 'Horario no disponible' });
       }
-
       const nuevaCita = await Cita.create({
-        fecha,
-        hora,
-        motivo,
-        id_mascota,
-        id_veterinario,
-        id_cliente: req.user.id
-      });
+  fecha,
+  hora,
+  motivo,
+  id_mascota,
+  id_veterinario,
+  id_cliente: req.user.id
+});
+
+try {
+  const payload = await cargarCitaConDatosCorreo(nuevaCita.id, { mascotaNombre: mascota.nombre });
+  if (payload) {
+    await enviarCorreoCitaAgendada({ data: payload });
+  }
+} catch (err) {
+  console.error('No se pudo enviar correo de cita agendada:', err?.message || err);
+}
 
       res.status(201).json({
         success: true,
@@ -128,32 +172,41 @@ const CitaController = {
   },
 
   cancelarCita: async (req, res) => {
-  try { 
-    const { id } = req.params;
-    const cita = await Cita.findByPk(id);
+    try { 
+      const { id } = req.params;
+      const cita = await Cita.findByPk(id);
 
-    if (!cita) {
-      return res.status(404).json({ message: 'Cita no encontrada' });
+      if (!cita) {
+        return res.status(404).json({ message: 'Cita no encontrada' });
+      }
+
+      if (req.user.tipo === 'cliente' && cita.id_cliente !== req.user.id) {
+        return res.status(403).json({ message: 'No puedes cancelar esta cita' });
+      }
+
+      cita.estado = 'Cancelada';
+      await cita.save();
+
+      try {
+        const payload = await cargarCitaConDatosCorreo(cita.id);
+        if (payload) {
+          await enviarCorreoCitaCancelada({ data: payload });
+        }
+      } catch (err) {
+        console.error('No se pudo enviar correo de cita cancelada:', err?.message || err);
+      }
+
+      // === Tu respuesta actual (SIN CAMBIOS) ===
+      res.json({
+        success: true,
+        message: 'Cita cancelada correctamente',
+        cita
+      });
+    } catch (error) {
+      console.error('Error al cancelar cita:', error);
+      res.status(500).json({ error: error.message });
     }
-
-    // Solo clientes dueños pueden cancelar
-    if (req.user.tipo === 'cliente' && cita.id_cliente !== req.user.id) {
-      return res.status(403).json({ message: 'No puedes cancelar esta cita' });
-    }
-
-    cita.estado = 'Cancelada';
-    await cita.save();
-
-    res.json({
-      success: true,
-      message: 'Cita cancelada correctamente',
-      cita
-    });
-  } catch (error) {
-    console.error('Error al cancelar cita:', error);
-    res.status(500).json({ error: error.message });
-  }
-},
+  },
 
   horariosDisponibles: async (req, res) => {
     try {
