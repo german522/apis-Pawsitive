@@ -1,19 +1,15 @@
 const { Cita, Mascota, Persona, Veterinario, Cliente } = require('../models');
-// 💡 NOTA: Asumo que en tu archivo de modelos tienes definidas todas las asociaciones correctamente.
 
 const CitaController = {
-  // 📅 Listar citas (filtra según el rol del usuario autenticado)
   listarCitas: async (req, res) => {
   try {
     const { user } = req;
     let filtro = {};
-
-    // Seguridad según rol
     if (user.tipo === 'cliente') {
-      filtro.id_cliente = user.id; // solo sus citas
+      filtro.id_cliente = user.id; 
     } else if (user.tipo === 'veterinario') {
       if (user.veterinario && user.veterinario.id){
-        filtro.id_veterinario = user.veterinario.id; // todas las citas donde es veterinario
+        filtro.id_veterinario = user.veterinario.id; 
       }
     } else {
       return res.status(403).json({ error: 'No tienes permisos para ver citas.' });
@@ -46,7 +42,6 @@ const CitaController = {
       order: [['fecha', 'ASC'], ['hora', 'ASC']]
     });
 
-    // Formatear para dashboard
     const citasFormateadas = citas.map(cita => {
       const fechaHora = new Date(`${cita.fecha}T${cita.hora}`);
       const opcionesFecha = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
@@ -85,13 +80,10 @@ const CitaController = {
   }
 },
 
-
-  // 🕒 Agendar una cita
   agendarCita: async (req, res) => {
     try {
       const { fecha, hora, motivo, id_mascota, id_veterinario } = req.body;
 
-      // Buscar la mascota y su cliente (usando el alias 'cliente' en el include)
       const mascota = await Mascota.findOne({
         where: { id: id_mascota },
         include: { model: Cliente, as: 'cliente' }
@@ -101,13 +93,12 @@ const CitaController = {
         return res.status(404).json({ message: 'Mascota no encontrada' });
       }
 
-      if (!mascota.cliente || mascota.cliente.id !== req.user.id) {
-        return res.status(403).json({ 
-          message: 'No puedes agendar citas para esta mascota (o no eres el dueño).' 
-        });
-      }
+      if (!mascota.cliente || mascota.cliente.id !== req.user.tipoId) {
+  return res.status(403).json({ 
+    message: 'No puedes agendar citas para esta mascota (o no eres el dueño).' 
+  });
+}
 
-      // Verificar si ya existe una cita en ese horario
       const existeCita = await Cita.findOne({
         where: { fecha, hora, id_veterinario, estado: 'Agendada' }
       });
@@ -116,7 +107,6 @@ const CitaController = {
         return res.status(400).json({ message: 'Horario no disponible' });
       }
 
-      // Crear nueva cita
       const nuevaCita = await Cita.create({
         fecha,
         hora,
@@ -137,39 +127,34 @@ const CitaController = {
     }
   },
 
-  // ❌ Cancelar una cita
   cancelarCita: async (req, res) => {
-    try { 
-      const { id } = req.params;
-      const cita = await Cita.findByPk(id);
+  try { 
+    const { id } = req.params;
+    const cita = await Cita.findByPk(id);
 
-      if (!cita) {
-        return res.status(404).json({ message: 'Cita no encontrada' });
-      }
-
-      if (req.user.tipo === 'cliente') {
-        const cliente = await Cliente.findOne({ where: { id_persona: req.user.id } });
-
-        if (!cliente || cita.id_cliente !== cliente.id) {
-          return res.status(403).json({ message: 'No puedes cancelar esta cita' });
-        }
-      }
-
-      cita.estado = 'Cancelada';
-      await cita.save();
-
-      res.json({
-        success: true,
-        message: 'Cita cancelada correctamente',
-        cita
-      });
-    } catch (error) {
-      console.error('Error al cancelar cita:', error);
-      res.status(500).json({ error: error.message });
+    if (!cita) {
+      return res.status(404).json({ message: 'Cita no encontrada' });
     }
-  },
 
-  // 🕘 Obtener horarios disponibles
+    // Solo clientes dueños pueden cancelar
+    if (req.user.tipo === 'cliente' && cita.id_cliente !== req.user.id) {
+      return res.status(403).json({ message: 'No puedes cancelar esta cita' });
+    }
+
+    cita.estado = 'Cancelada';
+    await cita.save();
+
+    res.json({
+      success: true,
+      message: 'Cita cancelada correctamente',
+      cita
+    });
+  } catch (error) {
+    console.error('Error al cancelar cita:', error);
+    res.status(500).json({ error: error.message });
+  }
+},
+
   horariosDisponibles: async (req, res) => {
     try {
       const { fecha, id_veterinario, id_mascota } = req.query;

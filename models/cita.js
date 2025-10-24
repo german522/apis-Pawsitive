@@ -6,7 +6,8 @@ module.exports = (sequelize, DataTypes) => {
     motivo: { type: DataTypes.STRING, allowNull: false },
     estado: { type: DataTypes.ENUM('Agendada','Cancelada','Completada'), defaultValue:'Agendada' }
   }, {
-    tableName: 'Citas'  // <- forzamos el nombre exacto de la tabla
+    tableName: 'Citas',
+    timestamps: false  
   });
 
   Cita.associate = (models) => {
