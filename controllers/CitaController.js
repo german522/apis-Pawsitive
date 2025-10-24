@@ -8,19 +8,37 @@ const CitaController = {
     const { user } = req;
     let filtro = {};
 
-    if (user.tipo === 'cliente') filtro.id_cliente = user.id;
-    if (user.tipo === 'veterinario') filtro.id_veterinario = user.id;
+    // Seguridad según rol
+    if (user.tipo === 'cliente') {
+      filtro.id_cliente = user.id; // solo sus citas
+    } else if (user.tipo === 'veterinario') {
+      if (user.veterinario && user.veterinario.id){
+        filtro.id_veterinario = user.veterinario.id; // todas las citas donde es veterinario
+      }
+    } else {
+      return res.status(403).json({ error: 'No tienes permisos para ver citas.' });
+    }
 
     const citas = await Cita.findAll({
       where: filtro,
       include: [
-        { model: Mascota },
-        { model: Persona, as: 'cliente', attributes: ['nombre', 'correo'] },
+        {
+          model: Mascota,
+          attributes: [
+            'nombre', 'especie', 'raza', 'sexo', 'color', 
+            'fecha_nacimiento', 'peso', 'URL_imagen'
+          ]
+        },
+        {
+          model: Persona,
+          as: 'cliente',
+          attributes: ['nombre', 'correo']
+        },
         { 
           model: Veterinario,
           include: { 
             model: Persona, 
-            as: 'persona',   // ✅ usar el alias definido en el modelo
+            as: 'persona', 
             attributes: ['nombre'] 
           }
         }
@@ -28,7 +46,40 @@ const CitaController = {
       order: [['fecha', 'ASC'], ['hora', 'ASC']]
     });
 
-    res.json(citas);
+    // Formatear para dashboard
+    const citasFormateadas = citas.map(cita => {
+      const fechaHora = new Date(`${cita.fecha}T${cita.hora}`);
+      const opcionesFecha = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      const opcionesHora = { hour: '2-digit', minute: '2-digit' };
+
+      return {
+        id: cita.id,
+        fecha: fechaHora.toLocaleDateString('es-MX', opcionesFecha),
+        hora: fechaHora.toLocaleTimeString('es-MX', opcionesHora),
+        estado: cita.estado || 'Pendiente',
+        motivo: cita.motivo,
+        mascota: cita.Mascota ? {
+          nombre: cita.Mascota.nombre,
+          especie: cita.Mascota.especie,
+          raza: cita.Mascota.raza,
+          sexo: cita.Mascota.sexo,
+          color: cita.Mascota.color,
+          fecha_nacimiento: cita.Mascota.fecha_nacimiento,
+          peso: cita.Mascota.peso,
+          URL_imagen: cita.Mascota.URL_imagen
+        } : null,
+        cliente: cita.cliente ? {
+          nombre: cita.cliente.nombre,
+          correo: cita.cliente.correo
+        } : null,
+        veterinario: cita.Veterinario && cita.Veterinario.persona ? {
+          nombre: cita.Veterinario.persona.nombre
+        } : null,
+        proximaCita: fechaHora > new Date()
+      };
+    });
+
+    res.json(citasFormateadas);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
