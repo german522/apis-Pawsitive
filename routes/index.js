@@ -8,6 +8,7 @@ const veterinarioRoutes = require("./veterinario.routes");
 const mascotaRoutes = require("./mascota.routes");
 const vacunaRoutes = require("./vacuna.routes");
 const vacunacionRoutes = require("./vacunacion.routes");
+const citaRoutes = require("./cita.routes");
 
 // Usar las rutas con sus prefijos
 router.use("/auth", authRoutes);
@@ -16,6 +17,7 @@ router.use("/veterinarios", veterinarioRoutes);
 router.use("/mascotas", mascotaRoutes);
 router.use("/vacunas", vacunaRoutes);
 router.use("/vacunaciones", vacunacionRoutes);
+router.use("/citas", citaRoutes);
 
 // Ruta de salud de la API
 router.get("/health", (req, res) => {
