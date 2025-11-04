@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Servicios extends Model {
     /**
@@ -11,19 +9,69 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+      // Servicios.belongsTo(models.TiposServicio, { foreignKey: 'id_tipo_servicio', as: 'tipo_servicio' });//TipoServicio Foraneo
+      // Servicios.belongsTo(models.Mascotas, { foreignKey: 'id_mascota',as: 'mascota' }); //Mascota Foranea
+      // Servicios.belongsTo(models.Clientes, { foreignKey: 'id_cliente', as: 'cliente' }); // Cliente Foraneo
+      // Servicios.belongsTo(models.Veterinarios, { foreignKey: 'id_personal_confirmado', as: 'veterinario' }); // Veterinario Foraneo
     }
   }
-  Servicios.init({
-    id_mascota: DataTypes.INTEGER,
-    id_cliente: DataTypes.INTEGER,
-    id_tipo_servicio: DataTypes.INTEGER,
-    id_personal_confirmado: DataTypes.INTEGER,
-    fecha_hora_solicitada: DataTypes.DATE,
-    estado: DataTypes.STRING,
-    costo: DataTypes.DECIMAL
-  }, {
-    sequelize,
-    modelName: 'Servicios',
-  });
+  Servicios.init(
+    {
+      id_mascota: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+          notEmpty: true,
+        },
+      },
+      id_cliente: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+          notEmpty: true,
+        },
+      },
+      id_tipo_servicio: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+          notEmpty: true,
+        },
+      },
+      id_personal_confirmado: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      fecha_hora_solicitada: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        validate: {
+          notEmpty: true,
+        },
+      },
+      estado: {
+        type: DataTypes.ENUM(
+          "Solicitado",
+          "Confirmado",
+          "Realizado",
+          "Cancelado"
+        ),
+        allowNull: false,
+        defaultValue: "Solicitado",
+      },
+      costo: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        validate: {
+          isDecimal: true,
+        },
+      },
+    },
+    {
+      sequelize,
+      modelName: "Servicios",
+      tableName: "Servicios",
+    }
+  );
   return Servicios;
 };
