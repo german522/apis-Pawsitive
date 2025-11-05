@@ -32,6 +32,11 @@ module.exports = {
       tratamiento_sugerido: {
         type: Sequelize.TEXT,
         allowNull: true
+      },
+      fecha_consulta: {
+        type: Sequelize.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.NOW
       }
     });
   },

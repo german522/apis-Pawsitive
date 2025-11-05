@@ -27,11 +27,16 @@ module.exports = (sequelize, DataTypes) => {
       tratamiento_sugerido: {
         type: DataTypes.TEXT,
         allowNull: true
+      },
+      fecha_consulta: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
       }
     },
     {
       tableName: "consultas",
-      timestamps: true
+      timestamps: false
     }
   );
 
