@@ -1,4 +1,3 @@
-// repositories/ConsultaRepository.js
 const { Consulta, Cita, Mascota, Persona, Veterinario } = require('../models');
 
 class ConsultaRepository {
@@ -32,39 +31,35 @@ class ConsultaRepository {
     });
   }
 
-  async listarConsultas() {
-    return await Consulta.findAll({
-      include: [
-        {
-          model: Cita,
-          as: 'cita',
-          include: [
-            { model: Mascota, attributes: ['nombre'] },
-            { model: Persona, as: 'cliente', attributes: ['nombre'] },
-            { 
-              model: Veterinario, 
-              include: { model: Persona, as: 'persona', attributes: ['nombre'] } 
-            }
-          ]
-        }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
+    async listarConsultasPorUsuario(tipo, tipoId) {
+  const whereCita = {};
+
+  if (tipo === 'cliente') {
+    whereCita.id_cliente = tipoId;
+  } else if (tipo === 'veterinario') {
+    whereCita.id_veterinario = tipoId;
   }
 
-  async actualizarConsulta(id, data) {
-    const consulta = await Consulta.findByPk(id);
-    if (!consulta) return null;
-    await consulta.update(data);
-    return consulta;
-  }
-
-  async eliminarConsulta(id) {
-    const consulta = await Consulta.findByPk(id);
-    if (!consulta) return null;
-    await consulta.destroy();
-    return true;
-  }
+  return await Consulta.findAll({
+    include: [
+      {
+        model: Cita,
+        as: 'cita',
+        where: whereCita, 
+        include: [
+          { model: Mascota, attributes: ['nombre'] },
+          { model: Persona, as: 'cliente', attributes: ['nombre'] },
+          {
+            model: Veterinario,
+            include: [
+              { model: Persona, as: 'persona', attributes: ['nombre'] }
+            ]
+          }
+        ]
+      }
+    ]
+  });
+}
 }
 
 module.exports = new ConsultaRepository();
