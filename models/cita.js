@@ -14,6 +14,7 @@ module.exports = (sequelize, DataTypes) => {
     Cita.belongsTo(models.Mascota, { foreignKey: 'id_mascota' });
     Cita.belongsTo(models.Persona, { foreignKey: 'id_cliente', as: 'cliente' });
     Cita.belongsTo(models.Veterinario, { foreignKey: 'id_veterinario' });
+    Cita.hasOne(models.Consulta, { foreignKey: 'id_cita', as: 'consulta', onDelete: 'CASCADE', onUpdate: 'CASCADE'});
   };
 
   return Cita;
