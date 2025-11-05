@@ -4,6 +4,7 @@ const VeterinarioRepository = require('./VeterinarioRepository');
 const MascotaRepository = require('./MascotaRepository');
 const VacunaRepository = require('./VacunaRepository');
 const VacunaxMascotaRepository = require('./VacunaxMascotaRepository');
+const ConsultaRepository = require('./consultaRepository');
 
 module.exports = {
     PersonaRepository,
@@ -11,5 +12,6 @@ module.exports = {
     VeterinarioRepository,
     MascotaRepository,
     VacunaRepository,
-    VacunaxMascotaRepository
+    VacunaxMascotaRepository,
+    ConsultaRepository
 };
