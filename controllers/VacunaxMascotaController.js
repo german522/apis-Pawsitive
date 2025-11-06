@@ -43,26 +43,57 @@ exports.aplicarVacuna = async (req, res) => {
 exports.updateVacunaMascota = async (req, res) => {
   try {
     const { id_mascota, id_vacunacion } = req.params;
-    const { fecha_aplicacion, id_vacuna } = req.body;
+    const { id_vacuna, fecha_aplicacion } = req.body;
 
-    const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
-    if (!registro || registro.id_mascota != id_mascota) {
-      return ApiResponse.notFound("Registro de vacunación no encontrado para esta mascota.", res);
+    // Validación de datos
+    if (!id_vacuna && !fecha_aplicacion) {
+      return res.status(400).json({
+        success: false,
+        message: "Debes enviar al menos un campo para actualizar (id_vacuna o fecha_aplicacion)."
+      });
     }
 
-    const updatedData = {
-      ...(id_vacuna && { id_vacuna }),
-      ...(fecha_aplicacion && { fecha_aplicacion })
-    };
+    // Buscar el registro
+    const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
+    if (!registro) {
+      return res.status(404).json({
+        success: false,
+        message: "Registro de vacunación no encontrado."
+      });
+    }
 
+    // Verificar que pertenece a la mascota
+    if (registro.id_mascota != id_mascota) {
+      return res.status(403).json({
+        success: false,
+        message: "La vacunación no pertenece a esta mascota."
+      });
+    }
+
+    // Crear objeto de actualización dinámico
+    const updatedData = {};
+    if (id_vacuna) updatedData.id_vacuna = id_vacuna;
+    if (fecha_aplicacion) updatedData.fecha_aplicacion = fecha_aplicacion;
+
+    // Actualizar
     const updated = await VacunaxMascotaRepository.update(id_vacunacion, updatedData);
-    return ApiResponse.success("Vacunación actualizada exitosamente.", { vacunacion: updated }, res);
+
+    return res.status(200).json({
+      success: true,
+      message: "Vacunación actualizada exitosamente.",
+      data: updated
+    });
 
   } catch (error) {
     console.error("Error al actualizar vacuna:", error);
-    return ApiResponse.error("Error interno del servidor.", res);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor.",
+      error: error.message
+    });
   }
 };
+
 
 // 3️⃣ Eliminar vacuna aplicada (solo veterinarios)
 exports.deleteVacunaMascota = async (req, res) => {
