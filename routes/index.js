@@ -13,6 +13,7 @@ const tiposServicioRoutes = require("./tiposServicioRoutes");
 const serviciosRoutes = require("./serviciosRoutes");
 const expedienteRoutes = require("./expedientes.routes");
 const consultaRoutes = require("./consulta.routes");
+const cirugiaRoutes = require("./cirugia.routes");
 
 // Usar las rutas con sus prefijos
 router.use("/auth", authRoutes);
@@ -26,6 +27,8 @@ router.use("/tipos-servicio", tiposServicioRoutes);
 router.use("/servicios", serviciosRoutes);
 router.use("/expedientes", expedienteRoutes);
 router.use("/consultas", consultaRoutes);
+router.use("/cirugias", cirugiaRoutes);
+
 
 // Ruta de salud de la API
 router.get("/health", (req, res) => {
