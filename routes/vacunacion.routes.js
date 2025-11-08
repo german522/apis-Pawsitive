@@ -3,22 +3,19 @@ const router = express.Router();
 const VacunaxMascotaController = require("../controllers/VacunaxMascotaController");
 const { authenticateToken, requireVeterinario } = require("../middlewares/auth");
 
-// Rutas de consulta generales (solo para veterinarios)
-router.get("/", authenticateToken, requireVeterinario, VacunaxMascotaController.getAll);
+// 1️⃣ Añadir vacuna a una mascota por su id (solo veterinarios)
+router.post("/:id_mascota/vacunas", authenticateToken, requireVeterinario, VacunaxMascotaController.aplicarVacuna);
 
-// Rutas accesibles para ambos tipos (con validaciones internas de permisos)
-router.get("/:id", authenticateToken, VacunaxMascotaController.getById);
-router.put("/:id", authenticateToken, VacunaxMascotaController.update);
-router.delete("/:id", authenticateToken, VacunaxMascotaController.delete);
+// 2️⃣ Actualizar vacuna aplicada a una mascota (solo veterinarios)
+router.put("/:id_mascota/vacunas/:id_vacunacion", authenticateToken, requireVeterinario, VacunaxMascotaController.updateVacunaMascota);
 
-// Aplicar vacuna (ambos tipos pueden hacerlo)
-router.post("/", authenticateToken, VacunaxMascotaController.aplicarVacuna);
+// 3️⃣ Eliminar vacuna aplicada a una mascota (solo veterinarios)
+router.delete("/:id_mascota/vacunas/:id_vacunacion", authenticateToken, requireVeterinario, VacunaxMascotaController.deleteVacunaMascota);
 
-// Consultas por mascota y vacuna
-router.get("/mascota/:id_mascota", authenticateToken, VacunaxMascotaController.getByMascotaId);
-router.get("/vacuna/:id_vacuna", authenticateToken, VacunaxMascotaController.getByVacunaId);
+// 4️⃣ Obtener todas las vacunas aplicadas a una mascota (usuarios y veterinarios)
+router.get("/:id_mascota/vacunas", authenticateToken, VacunaxMascotaController.getVacunasByMascotaId);
 
-// Historial completo de una mascota
-router.get("/mascota/:id_mascota/historial", authenticateToken, VacunaxMascotaController.getHistorialCompleto);
+// 5️⃣ Obtener detalle de una vacuna aplicada a una mascota (usuarios y veterinarios)
+router.get("/:id_mascota/vacunas/:id_vacunacion", authenticateToken, VacunaxMascotaController.getDetalleVacunaMascota);
 
 module.exports = router;
