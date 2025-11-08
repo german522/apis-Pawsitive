@@ -2,61 +2,21 @@ const { VacunaxMascotaRepository, MascotaRepository, VacunaRepository } = requir
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 
-// Obtener todos los registros de vacunación
-exports.getAll = async (req, res) => {
-  try {
-    const vacunaciones = await VacunaxMascotaRepository.getAll();
-    return ApiResponse.success("Registros de vacunación obtenidos exitosamente.", { vacunaciones }, res);
-  } catch (error) {
-    console.error("Error en GET /vacunaciones:", error);
-    return ApiResponse.error("Error interno del servidor.", res);
-  }
-};
-
-// Obtener registro de vacunación por ID
-exports.getById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const vacunacion = await VacunaxMascotaRepository.getById(id);
-    if (!vacunacion) {
-      return ApiResponse.notFound("Registro de vacunación no encontrado.", res);
-    }
-
-    return ApiResponse.success("Registro de vacunación obtenido exitosamente.", { vacunacion }, res);
-
-  } catch (error) {
-    console.error("Error en GET /vacunaciones/:id:", error);
-    return ApiResponse.error("Error interno del servidor.", res);
-  }
-};
-
-// Aplicar vacuna a mascota (crear nuevo registro)
+// 1️⃣ Añadir vacuna a una mascota (solo veterinarios)
 exports.aplicarVacuna = async (req, res) => {
   try {
-    const { id_mascota, id_vacuna, fecha_aplicacion } = req.body;
+    const { id_mascota } = req.params;
+    const { id_vacuna, fecha_aplicacion } = req.body;
 
-    // Validaciones básicas
-    if (!id_mascota || !id_vacuna) {
-      return ApiResponse.validation("Los campos id_mascota e id_vacuna son obligatorios.", null, res);
+    if (!id_vacuna) {
+      return ApiResponse.validation("El campo id_vacuna es obligatorio.", null, res);
     }
 
-    // Verificar que la mascota existe
     const mascota = await MascotaRepository.getById(id_mascota);
-    if (!mascota) {
-      return ApiResponse.notFound("Mascota no encontrada.", res);
-    }
+    if (!mascota) return ApiResponse.notFound("Mascota no encontrada.", res);
 
-    // Verificar que la vacuna existe
     const vacuna = await VacunaRepository.getById(id_vacuna);
-    if (!vacuna) {
-      return ApiResponse.notFound("Vacuna no encontrada.", res);
-    }
-
-    // Verificar permisos: los clientes solo pueden aplicar vacunas a sus mascotas
-    if (req.user.tipo === 'cliente' && mascota.id_cliente !== req.user.tipoId) {
-      return ApiResponse.forbidden("No tienes permiso para aplicar vacunas a esta mascota.", res);
-    }
+    if (!vacuna) return ApiResponse.notFound("Vacuna no encontrada.", res);
 
     const vacunacionData = {
       id_mascota,
@@ -68,165 +28,123 @@ exports.aplicarVacuna = async (req, res) => {
     return ApiResponse.success("Vacuna aplicada exitosamente.", { vacunacion }, res, 201);
 
   } catch (error) {
-    console.error("Error en POST /vacunaciones:", error);
-    
+    console.error("Error al aplicar vacuna:", error);
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
-
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
-
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Actualizar registro de vacunación
-exports.update = async (req, res) => {
+// 2️⃣ Actualizar vacuna aplicada (solo veterinarios)
+exports.updateVacunaMascota = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { fecha_aplicacion } = req.body;
+    const { id_mascota, id_vacunacion } = req.params;
+    const { id_vacuna, fecha_aplicacion } = req.body;
 
-    if (!fecha_aplicacion) {
-      return ApiResponse.validation("Debe proporcionar la fecha de aplicación para actualizar.", null, res);
+    // Validación de datos
+    if (!id_vacuna && !fecha_aplicacion) {
+      return res.status(400).json({
+        success: false,
+        message: "Debes enviar al menos un campo para actualizar (id_vacuna o fecha_aplicacion)."
+      });
     }
 
-    // Verificar que el registro existe
-    const existingVacunacion = await VacunaxMascotaRepository.getById(id);
-    if (!existingVacunacion) {
-      return ApiResponse.notFound("Registro de vacunación no encontrado.", res);
+    // Buscar el registro
+    const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
+    if (!registro) {
+      return res.status(404).json({
+        success: false,
+        message: "Registro de vacunación no encontrado."
+      });
     }
 
-    // Verificar permisos: los clientes solo pueden actualizar registros de sus mascotas
-    if (req.user.tipo === 'cliente') {
-      const mascota = await MascotaRepository.getById(existingVacunacion.id_mascota);
-      if (mascota && mascota.id_cliente !== req.user.tipoId) {
-        return ApiResponse.forbidden("No tienes permiso para actualizar este registro.", res);
-      }
+    // Verificar que pertenece a la mascota
+    if (registro.id_mascota != id_mascota) {
+      return res.status(403).json({
+        success: false,
+        message: "La vacunación no pertenece a esta mascota."
+      });
     }
 
-    const updatedData = {
-      fecha_aplicacion
-    };
+    // Crear objeto de actualización dinámico
+    const updatedData = {};
+    if (id_vacuna) updatedData.id_vacuna = id_vacuna;
+    if (fecha_aplicacion) updatedData.fecha_aplicacion = fecha_aplicacion;
 
-    const updatedVacunacion = await VacunaxMascotaRepository.update(id, updatedData);
-    return ApiResponse.success("Registro de vacunación actualizado exitosamente.", { vacunacion: updatedVacunacion }, res);
+    // Actualizar
+    const updated = await VacunaxMascotaRepository.update(id_vacunacion, updatedData);
+
+    return res.status(200).json({
+      success: true,
+      message: "Vacunación actualizada exitosamente.",
+      data: updated
+    });
 
   } catch (error) {
-    console.error("Error en PUT /vacunaciones/:id:", error);
-    
-    if (error instanceof ValidationError) {
-      return ApiResponse.validation(error.errors.map(e => e.message), null, res);
-    }
-
-    if (error instanceof DatabaseError) {
-      return ApiResponse.error("Error en la base de datos.", res);
-    }
-
-    return ApiResponse.error("Error interno del servidor.", res);
+    console.error("Error al actualizar vacuna:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor.",
+      error: error.message
+    });
   }
 };
 
-// Eliminar registro de vacunación
-exports.delete = async (req, res) => {
+
+// 3️⃣ Eliminar vacuna aplicada (solo veterinarios)
+exports.deleteVacunaMascota = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    // Verificar que el registro existe
-    const existingVacunacion = await VacunaxMascotaRepository.getById(id);
-    if (!existingVacunacion) {
-      return ApiResponse.notFound("Registro de vacunación no encontrado.", res);
+    const { id_mascota, id_vacunacion } = req.params;
+
+    const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
+    if (!registro || registro.id_mascota != id_mascota) {
+      return ApiResponse.notFound("Registro de vacunación no encontrado para esta mascota.", res);
     }
 
-    // Verificar permisos: los clientes solo pueden eliminar registros de sus mascotas
-    if (req.user.tipo === 'cliente') {
-      const mascota = await MascotaRepository.getById(existingVacunacion.id_mascota);
-      if (mascota && mascota.id_cliente !== req.user.tipoId) {
-        return ApiResponse.forbidden("No tienes permiso para eliminar este registro.", res);
-      }
-    }
-
-    await VacunaxMascotaRepository.deleteVacunaxMascota(id);
-    return ApiResponse.success("Registro de vacunación eliminado exitosamente.", null, res);
+    await VacunaxMascotaRepository.deleteVacunaxMascota(id_vacunacion);
+    return ApiResponse.success("Vacunación eliminada exitosamente.", null, res);
 
   } catch (error) {
-    console.error("Error en DELETE /vacunaciones/:id:", error);
-    
-    if (error instanceof DatabaseError) {
-      return ApiResponse.error("Error en la base de datos.", res);
-    }
-
+    console.error("Error al eliminar vacuna:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Obtener historial de vacunación por mascota
-exports.getByMascotaId = async (req, res) => {
+// 4️⃣ Obtener todas las vacunas aplicadas de una mascota (usuarios y veterinarios)
+exports.getVacunasByMascotaId = async (req, res) => {
   try {
     const { id_mascota } = req.params;
-    
-    // Verificar que la mascota existe
     const mascota = await MascotaRepository.getById(id_mascota);
-    if (!mascota) {
-      return ApiResponse.notFound("Mascota no encontrada.", res);
-    }
+    if (!mascota) return ApiResponse.notFound("Mascota no encontrada.", res);
 
-    // Verificar permisos: los clientes solo pueden ver registros de sus mascotas
-    if (req.user.tipo === 'cliente' && mascota.id_cliente !== req.user.tipoId) {
-      return ApiResponse.forbidden("No tienes permiso para ver el historial de esta mascota.", res);
-    }
-
-    const historial = await VacunaxMascotaRepository.getByMascotaId(id_mascota);
-    return ApiResponse.success("Historial de vacunación obtenido exitosamente.", { historial }, res);
+    const vacunas = await VacunaxMascotaRepository.getByMascotaId(id_mascota);
+    return ApiResponse.success("Vacunas aplicadas obtenidas exitosamente.", { vacunas }, res);
 
   } catch (error) {
-    console.error("Error en GET /vacunaciones/mascota/:id_mascota:", error);
+    console.error("Error al obtener vacunas:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
 
-// Obtener registros por vacuna
-exports.getByVacunaId = async (req, res) => {
+// 5️⃣ Obtener detalle de una vacuna aplicada (usuarios y veterinarios)
+exports.getDetalleVacunaMascota = async (req, res) => {
   try {
-    const { id_vacuna } = req.params;
-    
-    // Verificar que la vacuna existe
-    const vacuna = await VacunaRepository.getById(id_vacuna);
-    if (!vacuna) {
-      return ApiResponse.notFound("Vacuna no encontrada.", res);
+    const { id_mascota, id_vacunacion } = req.params;
+
+    const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
+    if (!registro || registro.id_mascota != id_mascota) {
+      return ApiResponse.notFound("Registro de vacunación no encontrado para esta mascota.", res);
     }
 
-    const registros = await VacunaxMascotaRepository.getByVacunaId(id_vacuna);
-    return ApiResponse.success("Registros de vacunación obtenidos exitosamente.", { registros }, res);
+    const vacuna = await VacunaRepository.getById(registro.id_vacuna);
+    return ApiResponse.success("Detalle de vacunación obtenido exitosamente.", { registro, vacuna }, res);
 
   } catch (error) {
-    console.error("Error en GET /vacunaciones/vacuna/:id_vacuna:", error);
-    return ApiResponse.error("Error interno del servidor.", res);
-  }
-};
-
-// Obtener historial completo de una mascota (ordenado cronológicamente)
-exports.getHistorialCompleto = async (req, res) => {
-  try {
-    const { id_mascota } = req.params;
-    
-    // Verificar que la mascota existe
-    const mascota = await MascotaRepository.getById(id_mascota);
-    if (!mascota) {
-      return ApiResponse.notFound("Mascota no encontrada.", res);
-    }
-
-    // Verificar permisos: los clientes solo pueden ver registros de sus mascotas
-    if (req.user.tipo === 'cliente' && mascota.id_cliente !== req.user.tipoId) {
-      return ApiResponse.forbidden("No tienes permiso para ver el historial de esta mascota.", res);
-    }
-
-    const historialCompleto = await VacunaxMascotaRepository.getHistorialCompleto(id_mascota);
-    return ApiResponse.success("Historial completo de vacunación obtenido exitosamente.", { historial: historialCompleto }, res);
-
-  } catch (error) {
-    console.error("Error en GET /vacunaciones/mascota/:id_mascota/historial:", error);
+    console.error("Error al obtener detalle de vacuna:", error);
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
