@@ -9,7 +9,10 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      //TiposServicio.hasMany(models.Servicios, { foreignKey: 'id_tipo_servicio', as: 'servicios' }); //Servicios Foraneo
+      TiposServicio.hasMany(models.Servicios, {
+        foreignKey: "id_tipo_servicio",
+        as: "servicios",
+      }); //Servicios Foraneo
     }
   }
 
@@ -32,6 +35,7 @@ module.exports = (sequelize, DataTypes) => {
       sequelize,
       modelName: "TiposServicio",
       tableName: "TiposServicios",
+      timestamps: false,
     }
   );
   return TiposServicio;
