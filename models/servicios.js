@@ -9,10 +9,22 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      // Servicios.belongsTo(models.TiposServicio, { foreignKey: 'id_tipo_servicio', as: 'tipo_servicio' });//TipoServicio Foraneo
-      // Servicios.belongsTo(models.Mascotas, { foreignKey: 'id_mascota',as: 'mascota' }); //Mascota Foranea
-      // Servicios.belongsTo(models.Clientes, { foreignKey: 'id_cliente', as: 'cliente' }); // Cliente Foraneo
-      // Servicios.belongsTo(models.Veterinarios, { foreignKey: 'id_personal_confirmado', as: 'veterinario' }); // Veterinario Foraneo
+      Servicios.belongsTo(models.TiposServicio, {
+        foreignKey: "id_tipo_servicio",
+        as: "tipo_servicio",
+      }); //TipoServicio Foraneo
+      Servicios.belongsTo(models.Mascota, {
+        foreignKey: "id_mascota",
+        as: "mascota",
+      }); //Mascota Foranea
+      Servicios.belongsTo(models.Cliente, {
+        foreignKey: "id_cliente",
+        as: "cliente",
+      }); // Cliente Foraneo
+      Servicios.belongsTo(models.Veterinario, {
+        foreignKey: "id_personal_confirmado",
+        as: "veterinario",
+      }); // Veterinario Foraneo
     }
   }
   Servicios.init(
@@ -71,6 +83,7 @@ module.exports = (sequelize, DataTypes) => {
       sequelize,
       modelName: "Servicios",
       tableName: "Servicios",
+      timestamps: false,
     }
   );
   return Servicios;
