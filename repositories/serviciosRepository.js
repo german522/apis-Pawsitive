@@ -1,13 +1,73 @@
 const {
-  Servicios,
   TiposServicio,
-  Mascotas,
-  Clientes,
-  Veterinarios,
-  Personas,
+  Servicios,
+  Mascota,
+  Cliente,
+  Veterinario,
+  Persona,
 } = require("../models");
 
 class ServiciosRepository {
+  async getDetallesServicio(id_servicio) {
+    const servicio = await Servicios.findOne({
+      where: { id: id_servicio },
+      include: [
+        {
+          model: TiposServicio,
+          as: "tipo_servicio",
+          attributes: ["nombre"],
+        },
+        {
+          model: Mascota,
+          as: "mascota",
+          attributes: ["nombre"],
+        },
+        {
+          model: Cliente,
+          as: "cliente",
+          include: [
+            {
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
+              attributes: ["nombre", "correo"],
+            },
+          ],
+        },
+        {
+          model: Veterinario,
+          as: "veterinario",
+          include: [
+            {
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
+              attributes: ["nombre", "correo"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!servicio) return null;
+
+    const fechaObj = new Date(servicio.fecha_hora_solicitada);
+    const fecha = fechaObj.toLocaleDateString("es-MX");
+    const hora = fechaObj.toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return {
+      clienteNombre: servicio.cliente?.persona?.nombre,
+      veterinarioNombre: servicio.veterinario?.persona?.nombre || "Sin asignar",
+      mascotaNombre: servicio.mascota?.nombre,
+      tipoServicioNombre: servicio.tipo_servicio?.nombre,
+      fecha,
+      hora,
+      clienteEmail: servicio.cliente?.persona?.correo,
+      veterinarioEmail: servicio.veterinario?.persona?.correo,
+    };
+  }
+
   async findAll() {
     return await Servicios.findAll({
       include: [
@@ -17,16 +77,17 @@ class ServiciosRepository {
           attributes: ["id", "nombre", "descripcion"],
         },
         {
-          model: Mascotas,
+          model: Mascota,
           as: "mascota",
           attributes: ["id", "nombre", "especie", "raza"],
         },
         {
-          model: Clientes,
+          model: Cliente,
           as: "cliente",
           include: [
             {
-              model: Personas,
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
               attributes: [
                 "id",
                 "nombre",
@@ -38,11 +99,12 @@ class ServiciosRepository {
           ],
         },
         {
-          model: Veterinarios,
+          model: Veterinario,
           as: "veterinario",
           include: [
             {
-              model: Personas,
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
               attributes: [
                 "id",
                 "nombre",
@@ -66,16 +128,17 @@ class ServiciosRepository {
           attributes: ["id", "nombre", "descripcion"],
         },
         {
-          model: Mascotas,
+          model: Mascota,
           as: "mascota",
           attributes: ["id", "nombre", "especie", "raza"],
         },
         {
-          model: Clientes,
+          model: Cliente,
           as: "cliente",
           include: [
             {
-              model: Personas,
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
               attributes: [
                 "id",
                 "nombre",
@@ -87,11 +150,12 @@ class ServiciosRepository {
           ],
         },
         {
-          model: Veterinarios,
+          model: Veterinario,
           as: "veterinario",
           include: [
             {
-              model: Personas,
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
               attributes: [
                 "id",
                 "nombre",
@@ -136,7 +200,7 @@ class ServiciosRepository {
           attributes: ["id", "nombre"],
         },
         {
-          model: Mascotas,
+          model: Mascota,
           as: "mascota",
           attributes: ["id", "nombre", "especie"],
         },
@@ -169,16 +233,17 @@ class ServiciosRepository {
           attributes: ["id", "nombre"],
         },
         {
-          model: Mascotas,
+          model: Mascota,
           as: "mascota",
           attributes: ["id", "nombre", "especie"],
         },
         {
-          model: Clientes,
+          model: Cliente,
           as: "cliente",
           include: [
             {
-              model: Personas,
+              model: Persona,
+              as: "persona", // ← AGREGAR 'as' aquí
               attributes: [
                 "id",
                 "nombre",
