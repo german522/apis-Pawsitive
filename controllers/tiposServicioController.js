@@ -44,7 +44,7 @@ class TiposServicioController {
 
   async create(req, res) {
     try {
-      const { nombre, descripcion } = req.body;
+      const { nombre, descripcion, costo } = req.body;
 
       // Validar que el nombre no exista
       const existingTipo = await tiposServicioRepository.findByName(nombre);
@@ -58,6 +58,7 @@ class TiposServicioController {
       const tipoServicio = await tiposServicioRepository.create({
         nombre,
         descripcion,
+        costo,
       });
 
       res.status(201).json({
@@ -77,11 +78,12 @@ class TiposServicioController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nombre, descripcion } = req.body;
+      const { nombre, descripcion, costo } = req.body;
 
       const tipoServicio = await tiposServicioRepository.update(id, {
         nombre,
         descripcion,
+        costo,
       });
 
       if (!tipoServicio) {
