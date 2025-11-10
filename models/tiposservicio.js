@@ -30,11 +30,18 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      costo: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        validate: {
+          isDecimal: true,
+        },
+      },
     },
     {
       sequelize,
       modelName: "TiposServicio",
-      tableName: "TiposServicios",
+      tableName: "TiposServicio",
       timestamps: false,
     }
   );
