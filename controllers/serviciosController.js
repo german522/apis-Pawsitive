@@ -1,4 +1,8 @@
 const serviciosRepository = require("../repositories/serviciosRepository");
+const {
+  enviarCorreoCitaAgendada,
+  enviarCorreoCitaCancelada,
+} = require("../utils/emailService");
 
 class ServiciosController {
   async getAll(req, res) {
@@ -46,11 +50,21 @@ class ServiciosController {
     try {
       const {
         id_mascota,
-        id_cliente,
         id_tipo_servicio,
         fecha_hora_solicitada,
         costo,
+        id_personal_confirmado, // para asignar veterinario
       } = req.body;
+
+      // Cliente autenticado desde el token
+      const id_cliente = req.user.tipo === "cliente" ? req.user.tipoId : null;
+
+      if (!id_cliente) {
+        return res.status(403).json({
+          success: false,
+          message: "Solo los clientes pueden registrar servicios.",
+        });
+      }
 
       const servicio = await serviciosRepository.create({
         id_mascota,
@@ -59,14 +73,35 @@ class ServiciosController {
         fecha_hora_solicitada,
         costo,
         estado: "Solicitado",
+        id_personal_confirmado: id_personal_confirmado || null,
       });
+
+      // Obtener detalles para el correo
+      const datos = await serviciosRepository.getDetallesServicio(servicio.id);
+
+      if (datos.veterinarioEmail) {
+        await enviarCorreoCitaAgendada({
+          data: {
+            toVeterinario: datos.veterinarioEmail,
+            veterinarioNombre: datos.veterinarioNombre,
+            clienteNombre: datos.clienteNombre,
+            mascotaNombre: datos.mascotaNombre,
+            fecha: datos.fecha,
+            hora: datos.hora,
+            motivo: datos.tipoServicioNombre,
+          },
+        });
+      }
 
       res.status(201).json({
         success: true,
-        message: "Servicio creado exitosamente",
+        message: datos.veterinarioEmail
+          ? "Servicio solicitado exitosamente. Se notificó al veterinario."
+          : "Servicio solicitado exitosamente. Asigne un veterinario para notificar.",
         data: servicio,
       });
     } catch (error) {
+      console.error("Error creando servicio:", error);
       res.status(500).json({
         success: false,
         message: "Error al crear el servicio",
@@ -131,6 +166,15 @@ class ServiciosController {
   async getByCliente(req, res) {
     try {
       const { id_cliente } = req.params;
+
+      // Asegurar que el cliente autenticado solo vea sus servicios
+      if (req.user.tipo !== "cliente" || req.user.tipoId != id_cliente) {
+        return res.status(403).json({
+          success: false,
+          message: "No puedes ver los servicios de otro cliente.",
+        });
+      }
+
       const servicios = await serviciosRepository.findByCliente(id_cliente);
 
       res.json({
@@ -188,11 +232,41 @@ class ServiciosController {
       const { estado } = req.body;
 
       const servicio = await serviciosRepository.updateEstado(id, estado);
-
       if (!servicio) {
         return res.status(404).json({
           success: false,
           message: "Servicio no encontrado",
+        });
+      }
+
+      // Obtener detalles para el correo
+      const datos = await serviciosRepository.getDetallesServicio(id);
+
+      if (estado === "Confirmado") {
+        await enviarCorreoCitaAgendada({
+          data: {
+            toCliente: datos.clienteEmail,
+            toVeterinario: datos.veterinarioEmail,
+            clienteNombre: datos.clienteNombre,
+            veterinarioNombre: datos.veterinarioNombre,
+            mascotaNombre: datos.mascotaNombre,
+            fecha: datos.fecha,
+            hora: datos.hora,
+            motivo: datos.tipoServicioNombre,
+          },
+        });
+      } else if (estado === "Cancelado") {
+        await enviarCorreoCitaCancelada({
+          data: {
+            toCliente: datos.clienteEmail,
+            toVeterinario: datos.veterinarioEmail,
+            clienteNombre: datos.clienteNombre,
+            veterinarioNombre: datos.veterinarioNombre,
+            mascotaNombre: datos.mascotaNombre,
+            fecha: datos.fecha,
+            hora: datos.hora,
+            motivo: datos.tipoServicioNombre,
+          },
         });
       }
 
@@ -202,6 +276,7 @@ class ServiciosController {
         data: servicio,
       });
     } catch (error) {
+      console.error("Error en updateEstado:", error);
       res.status(500).json({
         success: false,
         message: "Error al actualizar el estado del servicio",
