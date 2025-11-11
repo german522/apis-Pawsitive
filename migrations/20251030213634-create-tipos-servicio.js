@@ -22,14 +22,6 @@ module.exports = {
         type: Sequelize.DECIMAL(10, 2),
         allowNull: true,
       },
-      createdAt: {
-        allowNull: false,
-        type: Sequelize.DATE,
-      },
-      updatedAt: {
-        allowNull: false,
-        type: Sequelize.DATE,
-      },
     });
   },
   async down(queryInterface, Sequelize) {
