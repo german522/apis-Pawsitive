@@ -31,10 +31,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM("Solicitado", "Confirmado", "Realizado", "Cancelado"),
         allowNull: false,
         defaultValue: "Solicitado"
-      },
-      costo: {
-        type: DataTypes.DECIMAL(10, 2),
-        allowNull: true
       }
     },
     {
