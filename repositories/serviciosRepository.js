@@ -5,7 +5,7 @@ class ServiciosRepository {
     const servicio = await Servicios.findOne({
       where: { id },
       include: [
-        { model: TiposServicio, as: "tipo_servicio", attributes: ["nombre"] },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["nombre" , "descripcion" , "costo"] },
         { model: Mascota, as: "mascota", attributes: ["nombre"] },
         {
           model: Cliente,
@@ -59,7 +59,7 @@ class ServiciosRepository {
         {
           model: TiposServicio,
           as: "tipo_servicio",
-          attributes: ["id", "nombre", "descripcion"]
+          attributes: ["id", "nombre" , "descripcion" , "costo"]
         },
         {
           model: Mascota,
@@ -110,7 +110,7 @@ class ServiciosRepository {
         {
           model: TiposServicio,
           as: "tipo_servicio",
-          attributes: ["id", "nombre", "descripcion"]
+          attributes: ["id", "nombre" , "descripcion" , "costo"]
         },
         {
           model: Mascota,
@@ -175,7 +175,7 @@ class ServiciosRepository {
     return await Servicios.findAll({
       where: { id_cliente },
       include: [
-        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre" , "descripcion" , "costo"] },
         { model: Mascota, as: "mascota", attributes: ["id", "nombre", "especie"] }
       ],
       order: [["fecha_hora_solicitada", "DESC"]]
@@ -186,7 +186,7 @@ class ServiciosRepository {
     return await Servicios.findAll({
       where: { id_mascota },
       include: [
-        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] }
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre" , "descripcion" , "costo"] }
       ],
       order: [["fecha_hora_solicitada", "DESC"]]
     });
@@ -196,7 +196,7 @@ class ServiciosRepository {
     return await Servicios.findAll({
       where: { estado },
       include: [
-        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre" , "descripcion" , "costo"] },
         { model: Mascota, as: "mascota", attributes: ["id", "nombre", "especie"] },
         {
           model: Cliente,

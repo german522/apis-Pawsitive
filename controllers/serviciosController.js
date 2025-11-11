@@ -34,7 +34,7 @@ exports.getById = async (req, res) => {
 // Crear nuevo servicio (solo clientes)
 exports.create = async (req, res) => {
   try {
-    const { id_mascota, id_tipo_servicio, fecha_hora_solicitada, costo, id_personal_confirmado } = req.body;
+    const { id_mascota, id_tipo_servicio, fecha_hora_solicitada, id_personal_confirmado } = req.body;
     const id_cliente = req.user.tipo === "cliente" ? req.user.tipoId : null;
 
     if (!id_cliente) {
@@ -50,7 +50,6 @@ exports.create = async (req, res) => {
       id_cliente,
       id_tipo_servicio,
       fecha_hora_solicitada,
-      costo: costo || null,
       estado: "Solicitado",
       id_personal_confirmado: id_personal_confirmado || null,
     });
