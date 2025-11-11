@@ -1,136 +1,71 @@
-const tiposServicioRepository = require("../repositories/tiposServicioRepository");
+const TipoServicioRepository = require('../repositories/tiposServicioRepository');
+const ApiResponse = require('../utils/ApiResponse');
+const { ValidationError, DatabaseError } = require('sequelize');
 
-class TiposServicioController {
-  async getAll(req, res) {
-    try {
-      const tiposServicio = await tiposServicioRepository.findAll();
-      res.json({
-        success: true,
-        data: tiposServicio,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error al obtener los tipos de servicio",
-        error: error.message,
-      });
-    }
+// Obtener todos los tipos de servicio
+exports.getAll = async (req, res) => {
+  try {
+    const tiposServicios = await TipoServicioRepository.getAll();
+    return ApiResponse.success("Tipos de servicio obtenidos exitosamente.", { tiposServicios }, res);
+  } catch (error) {
+    console.error("Error en GET /tipos-servicio:", error);
+    return ApiResponse.error("Error interno del servidor.", res);
   }
+};
 
-  async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const tipoServicio = await tiposServicioRepository.findById(id);
+// Actualizar costo de un tipo de servicio por ID
+exports.updateCosto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { costo } = req.body;
 
-      if (!tipoServicio) {
-        return res.status(404).json({
-          success: false,
-          message: "Tipo de servicio no encontrado",
-        });
-      }
-
-      res.json({
-        success: true,
-        data: tipoServicio,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error al obtener el tipo de servicio",
-        error: error.message,
-      });
+    if (costo === undefined || costo === null || isNaN(costo)) {
+      return ApiResponse.validation("Debe proporcionar un valor numérico válido para 'costo'.", null, res);
     }
-  }
 
-  async create(req, res) {
-    try {
-      const { nombre, descripcion, costo } = req.body;
-
-      // Validar que el nombre no exista
-      const existingTipo = await tiposServicioRepository.findByName(nombre);
-      if (existingTipo) {
-        return res.status(400).json({
-          success: false,
-          message: "Ya existe un tipo de servicio con ese nombre",
-        });
-      }
-
-      const tipoServicio = await tiposServicioRepository.create({
-        nombre,
-        descripcion,
-        costo,
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Tipo de servicio creado exitosamente",
-        data: tipoServicio,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error al crear el tipo de servicio",
-        error: error.message,
-      });
+    const tipoServicio = await TipoServicioRepository.getById(id);
+    if (!tipoServicio) {
+      return ApiResponse.notFound("Tipo de servicio no encontrado.", res);
     }
-  }
 
-  async update(req, res) {
-    try {
-      const { id } = req.params;
-      const { nombre, descripcion, costo } = req.body;
+    const actualizado = await TipoServicioRepository.update(id, { costo });
+    return ApiResponse.success("Costo del tipo de servicio actualizado exitosamente.", { tipoServicio: actualizado }, res);
 
-      const tipoServicio = await tiposServicioRepository.update(id, {
-        nombre,
-        descripcion,
-        costo,
-      });
+  } catch (error) {
+    console.error("Error en PUT /tipos-servicio/:id/costo:", error);
 
-      if (!tipoServicio) {
-        return res.status(404).json({
-          success: false,
-          message: "Tipo de servicio no encontrado",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Tipo de servicio actualizado exitosamente",
-        data: tipoServicio,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error al actualizar el tipo de servicio",
-        error: error.message,
-      });
+    if (error instanceof ValidationError) {
+      return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
-  }
 
-  async delete(req, res) {
-    try {
-      const { id } = req.params;
-      const deleted = await tiposServicioRepository.delete(id);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Tipo de servicio no encontrado",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Tipo de servicio eliminado exitosamente",
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error al eliminar el tipo de servicio",
-        error: error.message,
-      });
+    if (error instanceof DatabaseError) {
+      return ApiResponse.error("Error en la base de datos.", res);
     }
-  }
-}
 
-module.exports = new TiposServicioController();
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};
+
+// Eliminar tipo de servicio por ID
+exports.delete = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const tipoServicio = await TipoServicioRepository.getById(id);
+    if (!tipoServicio) {
+      return ApiResponse.notFound("Tipo de servicio no encontrado.", res);
+    }
+
+    await TipoServicioRepository.delete(id);
+    return ApiResponse.success("Tipo de servicio eliminado exitosamente.", null, res);
+
+  } catch (error) {
+    console.error("Error en DELETE /tipos-servicio/:id:", error);
+
+    if (error instanceof DatabaseError) {
+      return ApiResponse.error("Error en la base de datos.", res);
+    }
+
+    return ApiResponse.error("Error interno del servidor.", res);
+  }
+};

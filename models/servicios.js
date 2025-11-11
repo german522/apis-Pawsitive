@@ -1,90 +1,73 @@
-"use strict";
-const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
-  class Servicios extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
-    static associate(models) {
-      // define association here
-      Servicios.belongsTo(models.TiposServicio, {
-        foreignKey: "id_tipo_servicio",
-        as: "tipo_servicio",
-      }); //TipoServicio Foraneo
-      Servicios.belongsTo(models.Mascota, {
-        foreignKey: "id_mascota",
-        as: "mascota",
-      }); //Mascota Foranea
-      Servicios.belongsTo(models.Cliente, {
-        foreignKey: "id_cliente",
-        as: "cliente",
-      }); // Cliente Foraneo
-      Servicios.belongsTo(models.Veterinario, {
-        foreignKey: "id_personal_confirmado",
-        as: "veterinario",
-      }); // Veterinario Foraneo
-    }
-  }
-  Servicios.init(
+  const Servicios = sequelize.define(
+    "Servicios",
     {
+      id: {
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+      },
       id_mascota: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        validate: {
-          notEmpty: true,
-        },
+        allowNull: false
       },
       id_cliente: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        validate: {
-          notEmpty: true,
-        },
+        allowNull: false
       },
       id_tipo_servicio: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        validate: {
-          notEmpty: true,
-        },
+        allowNull: false
       },
       id_personal_confirmado: {
         type: DataTypes.INTEGER,
-        allowNull: true,
+        allowNull: true
       },
       fecha_hora_solicitada: {
         type: DataTypes.DATE,
-        allowNull: false,
-        validate: {
-          notEmpty: true,
-        },
+        allowNull: false
       },
       estado: {
-        type: DataTypes.ENUM(
-          "Solicitado",
-          "Confirmado",
-          "Realizado",
-          "Cancelado"
-        ),
+        type: DataTypes.ENUM("Solicitado", "Confirmado", "Realizado", "Cancelado"),
         allowNull: false,
-        defaultValue: "Solicitado",
+        defaultValue: "Solicitado"
       },
       costo: {
         type: DataTypes.DECIMAL(10, 2),
-        allowNull: true,
-        validate: {
-          isDecimal: true,
-        },
-      },
+        allowNull: true
+      }
     },
     {
-      sequelize,
-      modelName: "Servicios",
-      tableName: "Servicios",
-      timestamps: false,
+      tableName: "servicios",
+      timestamps: false
     }
   );
+
+  Servicios.associate = (models) => {
+    Servicios.belongsTo(models.TiposServicio, {
+      foreignKey: "id_tipo_servicio",
+      as: "tipo_servicio",
+      onDelete: "CASCADE"
+    });
+
+    Servicios.belongsTo(models.Mascota, {
+      foreignKey: "id_mascota",
+      as: "mascota",
+      onDelete: "CASCADE"
+    });
+
+    Servicios.belongsTo(models.Cliente, {
+      foreignKey: "id_cliente",
+      as: "cliente",
+      onDelete: "CASCADE"
+    });
+
+    Servicios.belongsTo(models.Veterinario, {
+      foreignKey: "id_personal_confirmado",
+      as: "veterinario",
+      onDelete: "SET NULL"
+    });
+  };
+
   return Servicios;
 };
