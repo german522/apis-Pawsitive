@@ -6,7 +6,7 @@ module.exports = (sequelize, DataTypes) => {
     motivo: { type: DataTypes.STRING, allowNull: false },
     estado: { type: DataTypes.ENUM('Agendada','Cancelada','Completada'), defaultValue:'Agendada' }
   }, {
-    tableName: 'Citas',
+    tableName: 'citas',
     timestamps: false  
   });
 
