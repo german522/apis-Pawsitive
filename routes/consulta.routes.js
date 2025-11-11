@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ConsultaController = require('../controllers/consultaController');
+const ConsultaController = require('../controllers/ConsultaController');
 const { authenticateToken } = require("../middlewares/auth");
 
 router.post('/crear-consulta', authenticateToken, ConsultaController.crearConsulta);
