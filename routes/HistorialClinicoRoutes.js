@@ -1,10 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const expedienteMascotaController = require("../controllers/HistorialClinicoController");
+const { authenticateToken } = require("../middlewares/auth");
 
-// GET /api/mascotas/:id/expediente
+// /api/mascotas/:id/expediente
 router.get(
   "/mascotas/:id/expediente",
+  authenticateToken,
   expedienteMascotaController.obtenerExpedientePorMascota
 );
 
