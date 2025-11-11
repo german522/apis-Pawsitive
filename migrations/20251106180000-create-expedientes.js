@@ -13,7 +13,7 @@ module.exports = {
         allowNull: false,
         unique: true,
         references: {
-          model: 'Mascotas', // nombre exacto de tu tabla de mascotas
+          model: 'mascotas', // nombre exacto de tu tabla de mascotas
           key: 'id'
         },
         onUpdate: 'CASCADE',
