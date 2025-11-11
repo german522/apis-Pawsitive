@@ -1,39 +1,35 @@
 const { TiposServicio } = require("../models");
 
 class TiposServicioRepository {
-  async findAll() {
+  async getAll() {
     return await TiposServicio.findAll({
       order: [["nombre", "ASC"]],
-      attributes: ["id", "nombre", "descripcion", "costo"], // Opcional: especificar campos explícitamente
+      attributes: ["id", "nombre", "descripcion", "costo"]
     });
   }
 
-  async findById(id) {
+  async getById(id) {
     return await TiposServicio.findByPk(id);
   }
 
-  async create(tipoServicioData) {
-    return await TiposServicio.create(tipoServicioData);
+  async create(data) {
+    return await TiposServicio.create(data);
   }
 
-  async update(id, tipoServicioData) {
+  async update(id, data) {
     const tipoServicio = await TiposServicio.findByPk(id);
-    if (!tipoServicio) {
-      return null;
-    }
-    return await tipoServicio.update(tipoServicioData);
+    if (!tipoServicio) return null;
+    return await tipoServicio.update(data);
   }
 
   async delete(id) {
     const tipoServicio = await TiposServicio.findByPk(id);
-    if (!tipoServicio) {
-      return false;
-    }
+    if (!tipoServicio) return false;
     await tipoServicio.destroy();
     return true;
   }
 
-  async findByName(nombre) {
+  async getByName(nombre) {
     return await TiposServicio.findOne({ where: { nombre } });
   }
 }

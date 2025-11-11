@@ -2,7 +2,7 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.bulkInsert("tiposservicios", [
+    await queryInterface.bulkInsert("tiposservicio", [
       // 🩺 Servicios médicos generales
       {
         nombre: "Vacunación",
@@ -152,6 +152,6 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.bulkDelete("tiposservicios", null, {});
+    await queryInterface.bulkDelete("tiposservicio", null, {});
   },
 };

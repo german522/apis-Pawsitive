@@ -1,37 +1,22 @@
-const {
-  TiposServicio,
-  Servicios,
-  Mascota,
-  Cliente,
-  Veterinario,
-  Persona,
-} = require("../models");
+const { TiposServicio, Servicios, Mascota, Cliente, Veterinario, Persona } = require("../models");
 
 class ServiciosRepository {
-  async getDetallesServicio(id_servicio) {
+  async getDetallesServicio(id) {
     const servicio = await Servicios.findOne({
-      where: { id: id_servicio },
+      where: { id },
       include: [
-        {
-          model: TiposServicio,
-          as: "tipo_servicio",
-          attributes: ["nombre"],
-        },
-        {
-          model: Mascota,
-          as: "mascota",
-          attributes: ["nombre"],
-        },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["nombre"] },
+        { model: Mascota, as: "mascota", attributes: ["nombre"] },
         {
           model: Cliente,
           as: "cliente",
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
-              attributes: ["nombre", "correo"],
-            },
-          ],
+              as: "persona",
+              attributes: ["nombre", "correo"]
+            }
+          ]
         },
         {
           model: Veterinario,
@@ -39,12 +24,12 @@ class ServiciosRepository {
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
-              attributes: ["nombre", "correo"],
-            },
-          ],
-        },
-      ],
+              as: "persona",
+              attributes: ["nombre", "correo"]
+            }
+          ]
+        }
+      ]
     });
 
     if (!servicio) return null;
@@ -53,7 +38,7 @@ class ServiciosRepository {
     const fecha = fechaObj.toLocaleDateString("es-MX");
     const hora = fechaObj.toLocaleTimeString("es-MX", {
       hour: "2-digit",
-      minute: "2-digit",
+      minute: "2-digit"
     });
 
     return {
@@ -64,22 +49,22 @@ class ServiciosRepository {
       fecha,
       hora,
       clienteEmail: servicio.cliente?.persona?.correo,
-      veterinarioEmail: servicio.veterinario?.persona?.correo,
+      veterinarioEmail: servicio.veterinario?.persona?.correo
     };
   }
 
-  async findAll() {
+  async getAll() {
     return await Servicios.findAll({
       include: [
         {
           model: TiposServicio,
           as: "tipo_servicio",
-          attributes: ["id", "nombre", "descripcion"],
+          attributes: ["id", "nombre", "descripcion"]
         },
         {
           model: Mascota,
           as: "mascota",
-          attributes: ["id", "nombre", "especie", "raza"],
+          attributes: ["id", "nombre", "especie", "raza"]
         },
         {
           model: Cliente,
@@ -87,16 +72,16 @@ class ServiciosRepository {
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
+              as: "persona",
               attributes: [
                 "id",
                 "nombre",
                 "apellido_paterno",
                 "apellido_materno",
-                "telefono",
-              ],
-            },
-          ],
+                "telefono"
+              ]
+            }
+          ]
         },
         {
           model: Veterinario,
@@ -104,33 +89,33 @@ class ServiciosRepository {
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
+              as: "persona",
               attributes: [
                 "id",
                 "nombre",
                 "apellido_paterno",
-                "apellido_materno",
-              ],
-            },
-          ],
-        },
+                "apellido_materno"
+              ]
+            }
+          ]
+        }
       ],
-      order: [["fecha_hora_solicitada", "DESC"]],
+      order: [["fecha_hora_solicitada", "DESC"]]
     });
   }
 
-  async findById(id) {
+  async getById(id) {
     return await Servicios.findByPk(id, {
       include: [
         {
           model: TiposServicio,
           as: "tipo_servicio",
-          attributes: ["id", "nombre", "descripcion"],
+          attributes: ["id", "nombre", "descripcion"]
         },
         {
           model: Mascota,
           as: "mascota",
-          attributes: ["id", "nombre", "especie", "raza"],
+          attributes: ["id", "nombre", "especie", "raza"]
         },
         {
           model: Cliente,
@@ -138,16 +123,16 @@ class ServiciosRepository {
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
+              as: "persona",
               attributes: [
                 "id",
                 "nombre",
                 "apellido_paterno",
                 "apellido_materno",
-                "telefono",
-              ],
-            },
-          ],
+                "telefono"
+              ]
+            }
+          ]
         },
         {
           model: Veterinario,
@@ -155,125 +140,97 @@ class ServiciosRepository {
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
+              as: "persona",
               attributes: [
                 "id",
                 "nombre",
                 "apellido_paterno",
-                "apellido_materno",
-              ],
-            },
-          ],
-        },
-      ],
+                "apellido_materno"
+              ]
+            }
+          ]
+        }
+      ]
     });
   }
 
-  async create(servicioData) {
-    return await Servicios.create(servicioData);
+  async create(data) {
+    return await Servicios.create(data);
   }
 
-  async update(id, servicioData) {
+  async update(id, data) {
     const servicio = await Servicios.findByPk(id);
-    if (!servicio) {
-      return null;
-    }
-    return await servicio.update(servicioData);
+    if (!servicio) return null;
+    return await servicio.update(data);
   }
 
   async delete(id) {
     const servicio = await Servicios.findByPk(id);
-    if (!servicio) {
-      return false;
-    }
+    if (!servicio) return false;
     await servicio.destroy();
     return true;
   }
 
-  async findByCliente(id_cliente) {
+  async getByCliente(id_cliente) {
     return await Servicios.findAll({
       where: { id_cliente },
       include: [
-        {
-          model: TiposServicio,
-          as: "tipo_servicio",
-          attributes: ["id", "nombre"],
-        },
-        {
-          model: Mascota,
-          as: "mascota",
-          attributes: ["id", "nombre", "especie"],
-        },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] },
+        { model: Mascota, as: "mascota", attributes: ["id", "nombre", "especie"] }
       ],
-      order: [["fecha_hora_solicitada", "DESC"]],
+      order: [["fecha_hora_solicitada", "DESC"]]
     });
   }
 
-  async findByMascota(id_mascota) {
+  async getByMascota(id_mascota) {
     return await Servicios.findAll({
       where: { id_mascota },
       include: [
-        {
-          model: TiposServicio,
-          as: "tipo_servicio",
-          attributes: ["id", "nombre"],
-        },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] }
       ],
-      order: [["fecha_hora_solicitada", "DESC"]],
+      order: [["fecha_hora_solicitada", "DESC"]]
     });
   }
 
-  async findByEstado(estado) {
+  async getByEstado(estado) {
     return await Servicios.findAll({
       where: { estado },
       include: [
-        {
-          model: TiposServicio,
-          as: "tipo_servicio",
-          attributes: ["id", "nombre"],
-        },
-        {
-          model: Mascota,
-          as: "mascota",
-          attributes: ["id", "nombre", "especie"],
-        },
+        { model: TiposServicio, as: "tipo_servicio", attributes: ["id", "nombre"] },
+        { model: Mascota, as: "mascota", attributes: ["id", "nombre", "especie"] },
         {
           model: Cliente,
           as: "cliente",
           include: [
             {
               model: Persona,
-              as: "persona", // ← AGREGAR 'as' aquí
+              as: "persona",
               attributes: [
                 "id",
                 "nombre",
                 "apellido_paterno",
-                "apellido_materno",
-              ],
-            },
-          ],
-        },
+                "apellido_materno"
+              ]
+            }
+          ]
+        }
       ],
-      order: [["fecha_hora_solicitada", "ASC"]],
+      order: [["fecha_hora_solicitada", "ASC"]]
     });
   }
 
   async updateEstado(id, estado) {
     const servicio = await Servicios.findByPk(id);
-    if (!servicio) {
-      return null;
-    }
+    if (!servicio) return null;
     return await servicio.update({ estado });
   }
 
   async assignVeterinario(id, id_personal_confirmado) {
     const servicio = await Servicios.findByPk(id);
-    if (!servicio) {
-      return null;
-    }
+    if (!servicio) return null;
     return await servicio.update({
       id_personal_confirmado,
-      estado: "Confirmado",
+      estado: "Confirmado"
     });
   }
 }
