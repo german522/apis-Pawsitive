@@ -4,6 +4,12 @@ const VeterinarioRepository = require('./VeterinarioRepository');
 const MascotaRepository = require('./MascotaRepository');
 const VacunaRepository = require('./VacunaRepository');
 const VacunaxMascotaRepository = require('./VacunaxMascotaRepository');
+const ConsultaRepository = require('./consultaRepository');
+const TiposServicioRepository = require('./tiposServicioRepository');
+const ServicioRepository = require('./serviciosRepository');
+const ExpedienteRepository = require('./ExpedienteRepository');
+const CirugiaRepository = require('./CirugiaRepository');
+
 
 module.exports = {
     PersonaRepository,
@@ -11,5 +17,10 @@ module.exports = {
     VeterinarioRepository,
     MascotaRepository,
     VacunaRepository,
-    VacunaxMascotaRepository
+    VacunaxMascotaRepository,
+    ConsultaRepository,
+    TiposServicioRepository,
+    ServicioRepository,
+    ExpedienteRepository,
+    CirugiaRepository
 };
