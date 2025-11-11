@@ -4,14 +4,7 @@ class TiposServicioRepository {
   async findAll() {
     return await TiposServicio.findAll({
       order: [["nombre", "ASC"]],
-      attributes: [
-        "id",
-        "nombre",
-        "descripcion",
-        "costo",
-        "createdAt",
-        "updatedAt",
-      ], // Opcional: especificar campos explícitamente
+      attributes: ["id", "nombre", "descripcion", "costo"], // Opcional: especificar campos explícitamente
     });
   }
 
