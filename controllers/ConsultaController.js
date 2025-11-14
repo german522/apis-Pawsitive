@@ -29,6 +29,7 @@ const ConsultaController = {
 
       const nuevaConsulta = await ConsultaRepository.crearConsulta({
         id_cita,
+        id_mascota: cita.id_mascota,
         diagnostico,
         observaciones,
         tratamiento_sugerido,
