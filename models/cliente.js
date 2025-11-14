@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "mascotas",
       onDelete: "CASCADE"
     });
+    Cliente.hasMany(models.Cita, {
+      foreignKey: "id_cliente",
+      as: "citas",
+      onDelete: "CASCADE"
+    });
   };
 
   return Cliente;

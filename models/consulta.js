@@ -16,6 +16,14 @@ module.exports = (sequelize, DataTypes) => {
           key: 'id'
         }
       },
+      id_mascota: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'mascotas',
+          key: 'id'
+        } 
+      },
       diagnostico: {
         type: DataTypes.TEXT,
         allowNull: false
@@ -44,6 +52,11 @@ module.exports = (sequelize, DataTypes) => {
     Consulta.belongsTo(models.Cita, {
       foreignKey: "id_cita",
       as: "cita",
+      onDelete: "CASCADE"
+    });
+    Consulta.belongsTo(models.Mascota, {
+      foreignKey: "id_mascota",
+      as: "mascota",
       onDelete: "CASCADE"
     });
   };
