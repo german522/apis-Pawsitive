@@ -21,6 +21,14 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
+      id_mascota:{
+        type:Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'mascotas',
+          key: 'id'
+        },
+      },
       diagnostico: {
         type: Sequelize.TEXT,
         allowNull: false

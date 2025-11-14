@@ -1,6 +1,9 @@
 module.exports = (sequelize, DataTypes) => {
   const Cita = sequelize.define('Cita', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id_mascota: { type: DataTypes.INTEGER, allowNull: false },
+    id_cliente: { type: DataTypes.INTEGER, allowNull: false },
+    id_veterinario: { type: DataTypes.INTEGER, allowNull: false },
     fecha: { type: DataTypes.DATEONLY, allowNull: false },
     hora: { type: DataTypes.TIME, allowNull: false },
     motivo: { type: DataTypes.STRING, allowNull: false },
