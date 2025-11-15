@@ -9,7 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       id_cita: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         unique: true,
         references: {
           model: 'citas',

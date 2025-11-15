@@ -12,7 +12,7 @@ module.exports = {
       },
       id_cita: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         unique: true,
         references: {
           model: 'citas',
