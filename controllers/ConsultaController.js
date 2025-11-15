@@ -36,6 +36,9 @@ const ConsultaController = {
         fecha_consulta: new Date()
       });
 
+      cita.estado = 'Completada';
+      await cita.save();
+
       return ApiResponse.success('Consulta creada correctamente.', nuevaConsulta, res, 201);
     } catch (error) {
       console.error('Error al crear consulta:', error);
@@ -74,6 +77,40 @@ listarConsultasPorUsuario : async (req, res) => {
       return ApiResponse.error('Error al obtener la consulta.', res, 500, error.message);
     }
   },
+
+// Obtener todas las consultas por id_mascota
+obtenerConsultasPorMascota: async (req, res) => {
+  try {
+    const { id_mascota } = req.params;
+
+    const consultas = await ConsultaRepository.obtenerPorMascota(id_mascota);
+
+    if (!consultas.length) {
+      return ApiResponse.notFound(
+        "No se encontraron consultas para esta mascota.",
+        res
+      );
+    }
+
+    return ApiResponse.success(
+      "Consultas obtenidas correctamente.",
+      consultas,
+      res
+    );
+
+  } catch (error) {
+    console.error("Error al obtener consultas por mascota:", error);
+    return ApiResponse.error(
+      "Error interno del servidor.",
+      res,
+      500,
+      error.message
+    );
+  }
+}
+
+
+
 };
 
 module.exports = ConsultaController;
