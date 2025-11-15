@@ -1,9 +1,9 @@
 const { ConsultaRepository } = require('../repositories');
-const { Cita } = require('../models');
+const { Cita, Mascota, Persona } = require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 
 const ConsultaController = {
-  // Crear una nueva consulta (solo veterinarios)
+
   crearConsulta: async (req, res) => {
     try {
       const { id_cita, diagnostico, observaciones, tratamiento_sugerido } = req.body;
@@ -43,6 +43,48 @@ const ConsultaController = {
     } catch (error) {
       console.error('Error al crear consulta:', error);
       return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
+    }
+  },
+
+  crearConsultaEmergencia: async (req, res) => {
+    try {
+      const { id_mascota, id_cliente, diagnostico, observaciones, tratamiento_sugerido } = req.body;
+      const user = req.user;
+
+      // Validar rol
+      if (user.tipo !== "veterinario") {
+        return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
+      }
+
+      // Validar body
+      if (!id_mascota || !id_cliente || !diagnostico) {
+        return ApiResponse.validation(
+          "Complete los campos requeridos: id_mascota, id_cliente, diagnostico.",
+          null,
+          res
+        );
+      }
+
+      // Crear consulta SIN cita
+      const nuevaConsulta = await ConsultaRepository.crearConsulta({
+        id_cita: null,
+        id_mascota,
+        diagnostico,
+        observaciones: observaciones || null,
+        tratamiento_sugerido: tratamiento_sugerido || null,
+        fecha_consulta: new Date()
+      });
+
+      return ApiResponse.success(
+        "Consulta de emergencia creada correctamente.",
+        nuevaConsulta,
+        res,
+        201
+      );
+
+    } catch (error) {
+      console.error("Error al crear consulta de emergencia:", error);
+      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
     }
   },
 
