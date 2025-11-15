@@ -74,6 +74,16 @@ module.exports = (sequelize, DataTypes) => {
       otherKey: "id_vacuna",
       as: "vacunas",
     });
+    Mascota.hasMany(models.Cita, {
+      foreignKey: "id_mascota",
+      as: "citas",
+      onDelete: "CASCADE",
+    });
+    Mascota.hasMany(models.Consulta, {
+      foreignKey: "id_mascota",
+      as: "consultas",
+      onDelete: "CASCADE",
+    });
   };
 
   return Mascota;

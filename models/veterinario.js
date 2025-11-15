@@ -37,6 +37,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "persona",
       onDelete: "CASCADE"
     });
+    Veterinario.hasMany(models.Cita, {
+      foreignKey: "id_veterinario",
+      as: "citas",
+      onDelete: "CASCADE"
+    });
   };
 
   return Veterinario;

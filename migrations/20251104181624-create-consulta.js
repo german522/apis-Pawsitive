@@ -12,7 +12,7 @@ module.exports = {
       },
       id_cita: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         unique: true,
         references: {
           model: 'citas',
@@ -20,6 +20,14 @@ module.exports = {
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
+      },
+      id_mascota:{
+        type:Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'mascotas',
+          key: 'id'
+        },
       },
       diagnostico: {
         type: Sequelize.TEXT,
