@@ -6,30 +6,40 @@ class ConsultaRepository {
   }
 
   async obtenerPorMascota(id_mascota) {
-    return await Consulta.findAll({
-      include: [
-        {
-          model: Cita,
-          as: "cita",
-          where: { id_mascota }, // filtra por la mascota
-          include: [
-            { model: Mascota, attributes: ["nombre"] },
-            { model: Persona, as: "cliente", attributes: ["nombre", "correo"] },
-            {
-              model: Veterinario,
-              include: [
-                {
-                  model: Persona,
-                  as: "persona",
-                  attributes: ["nombre", "correo"],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-  }
+  return await Consulta.findAll({
+    include: [
+      {
+        model: Cita,
+        as: "cita",
+        include: [
+          {
+            model: Mascota,
+            as: "Mascotum",
+            attributes: ["nombre"]
+          },
+          {
+            model: Persona,
+            as: "cliente",
+            attributes: ["nombre", "correo"]
+          },
+          {
+            model: Veterinario,
+            include: [
+              {
+                model: Persona,
+                as: "persona",
+                attributes: ["nombre", "correo"],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    where: { id_mascota }
+  });
+}
+
+
 
   async obtenerPorId(id) {
     return await Consulta.findByPk(id, {
