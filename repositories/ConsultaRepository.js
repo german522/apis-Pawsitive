@@ -71,35 +71,27 @@ class ConsultaRepository {
     });
   }
 
-  async listarConsultasPorUsuario(tipo, tipoId) {
-    const whereCita = {};
-
-    if (tipo === "cliente") {
-      whereCita.id_cliente = tipoId;
-    } else if (tipo === "veterinario") {
-      whereCita.id_veterinario = tipoId;
-    }
-
-    return await Consulta.findAll({
-      include: [
-        {
-          model: Cita,
-          as: "cita",
-          where: whereCita,
-          include: [
-            { model: Mascota, attributes: ["nombre"] },
-            { model: Persona, as: "cliente", attributes: ["nombre"] },
-            {
-              model: Veterinario,
-              include: [
-                { model: Persona, as: "persona", attributes: ["nombre"] },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-  }
+  async listarConsultasPorUsuario(tipoId) {
+  return await Consulta.findAll({
+    where: { id_veterinario: tipoId }, // <-- AQUI VA EL FILTRO CORRECTO
+    include: [
+      {
+        model: Cita,
+        as: "cita",
+        include: [
+          { model: Mascota, attributes: ["nombre"] },
+          { model: Persona, as: "cliente", attributes: ["nombre"] },
+          {
+            model: Veterinario,
+            include: [
+              { model: Persona, as: "persona", attributes: ["nombre"] },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
 }
 
 module.exports = new ConsultaRepository();
