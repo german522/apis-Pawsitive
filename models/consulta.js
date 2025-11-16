@@ -59,6 +59,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "mascota",
       onDelete: "CASCADE"
     });
+    Consulta.belongsTo(models.Veterinario, {
+      foreignKey: "id_veterinario",
+      as: "veterinario",
+      onDelete: "SET NULL"
+    });
   };
 
   return Consulta;
