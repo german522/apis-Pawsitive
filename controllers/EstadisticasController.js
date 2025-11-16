@@ -46,7 +46,7 @@ const EstadisticasController = {
 
   consultasPorSemanaPorVet: async (req, res) => {
     try {
-      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      const id_veterinario = req.user.tipoId;
       if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
 
       const rows = await EstadisticasRepository.getConsultasPorSemanaPorVet(id_veterinario);
@@ -75,7 +75,7 @@ const EstadisticasController = {
 
   vacunasPorSemanaPorVet: async (req, res) => {
     try {
-      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      const id_veterinario = req.user.tipoId;
       if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
 
       const rows = await EstadisticasRepository.getVacunasPorSemanaPorVet(id_veterinario);
@@ -91,7 +91,7 @@ const EstadisticasController = {
 
   gananciasConsultasPorSemana: async (req, res) => {
     try {
-      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      const id_veterinario = req.user.tipoId;
       if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
 
       const rows = await EstadisticasRepository.getGananciasConsultasPorSemana(id_veterinario);
@@ -112,7 +112,7 @@ const EstadisticasController = {
 
   gananciasServiciosPorSemana: async (req, res) => {
     try {
-      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      const id_veterinario = req.user.tipoId;
       if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
 
       const rows = await EstadisticasRepository.getGananciasServiciosPorSemana(id_veterinario);
@@ -181,7 +181,7 @@ const EstadisticasController = {
   // Cantidad de cada tipo de servicio por veterinario y por semana
   cantidadPorTipoServicioPorVetYSemana: async (req, res) => {
     try {
-      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      const id_veterinario = req.user.tipoId;
       if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
 
       const rows = await EstadisticasRepository.getCantidadPorTipoServicioPorVetYSemana(id_veterinario);
