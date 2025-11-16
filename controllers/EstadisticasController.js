@@ -136,6 +136,70 @@ const EstadisticasController = {
     } catch (error) {
       return ApiResponse.error("Error obteniendo ganancias totales.", res, 500, error.message);
     }
+  },
+
+  cantidadPorTipoServicio: async (req, res) => {
+    try {
+      const rows = await EstadisticasRepository.getCantidadPorTipoServicio();
+
+      const data = rows.map(r => ({
+        id_tipo_servicio: r.dataValues.id_tipo_servicio,
+        nombre: r.tipo_servicio?.nombre,
+        descripcion: r.tipo_servicio?.descripcion,
+        costo: Number(r.tipo_servicio?.costo),
+        cantidad: parseInt(r.dataValues.cantidad, 10)
+      }));
+
+      return ApiResponse.success("Cantidad por tipo de servicio obtenida.", data, res);
+    } catch (error) {
+      console.error("Error cantidadPorTipoServicio:", error);
+      return ApiResponse.error("Error obteniendo cantidad por tipo de servicio.", res, 500, error.message);
+    }
+  },
+
+  // Cantidad de cada tipo de servicio por semana
+  cantidadPorTipoServicioPorSemana: async (req, res) => {
+    try {
+      const rows = await EstadisticasRepository.getCantidadPorTipoServicioPorSemana();
+
+      const data = rows.map(r => ({
+        semana: r.dataValues.semana,
+        id_tipo_servicio: r.dataValues.id_tipo_servicio,
+        nombre: r.tipo_servicio?.nombre,
+        descripcion: r.tipo_servicio?.descripcion,
+        costo: Number(r.tipo_servicio?.costo),
+        cantidad: parseInt(r.dataValues.cantidad, 10)
+      }));
+
+      return ApiResponse.success("Cantidad por tipo de servicio por semana obtenida.", data, res);
+    } catch (error) {
+      console.error("Error cantidadPorTipoServicioPorSemana:", error);
+      return ApiResponse.error("Error obteniendo cantidad por tipo de servicio por semana.", res, 500, error.message);
+    }
+  },
+
+  // Cantidad de cada tipo de servicio por veterinario y por semana
+  cantidadPorTipoServicioPorVetYSemana: async (req, res) => {
+    try {
+      const id_veterinario = req.params.id_veterinario || req.user?.tipoId;
+      if (!id_veterinario) return ApiResponse.validation("Falta id_veterinario.", null, res);
+
+      const rows = await EstadisticasRepository.getCantidadPorTipoServicioPorVetYSemana(id_veterinario);
+
+      const data = rows.map(r => ({
+        semana: r.dataValues.semana,
+        id_tipo_servicio: r.dataValues.id_tipo_servicio,
+        nombre: r.tipo_servicio?.nombre,
+        descripcion: r.tipo_servicio?.descripcion,
+        costo: Number(r.tipo_servicio?.costo),
+        cantidad: parseInt(r.dataValues.cantidad, 10)
+      }));
+
+      return ApiResponse.success("Cantidad por tipo de servicio por veterinario y semana obtenida.", data, res);
+    } catch (error) {
+      console.error("Error cantidadPorTipoServicioPorVetYSemana:", error);
+      return ApiResponse.error("Error obteniendo cantidad por tipo de servicio por veterinario y semana.", res, 500, error.message);
+    }
   }
 };
 

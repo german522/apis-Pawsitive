@@ -143,6 +143,64 @@ async getGananciasTotales(id_veterinario, costoConsulta) {
   };
 }
 
+async getCantidadPorTipoServicio() {
+    return await Servicios.findAll({
+      attributes: [
+        "id_tipo_servicio",
+        [Sequelize.fn("COUNT", Sequelize.col("Servicios.id")), "cantidad"]
+      ],
+      include: [
+        {
+          model: TiposServicio,
+          as: "tipo_servicio",
+          attributes: ["nombre", "descripcion", "costo"]
+        }
+      ],
+      group: ["id_tipo_servicio", "tipo_servicio.id"]
+    });
+  }
+
+  // Cantidad de cada tipo de servicio por semana
+  async getCantidadPorTipoServicioPorSemana() {
+    return await Servicios.findAll({
+      attributes: [
+        "id_tipo_servicio",
+        [Sequelize.fn("YEARWEEK", Sequelize.col("fecha_hora_solicitada")), "semana"],
+        [Sequelize.fn("COUNT", Sequelize.col("Servicios.id")), "cantidad"]
+      ],
+      include: [
+        {
+          model: TiposServicio,
+          as: "tipo_servicio",
+          attributes: ["nombre", "descripcion", "costo"]
+        }
+      ],
+      group: ["id_tipo_servicio", "tipo_servicio.id", "semana"],
+      order: [[Sequelize.fn("YEARWEEK", Sequelize.col("fecha_hora_solicitada")), "ASC"]]
+    });
+  }
+
+  // Cantidad de cada tipo de servicio por veterinario y por semana
+  async getCantidadPorTipoServicioPorVetYSemana(id_veterinario) {
+    return await Servicios.findAll({
+      where: { id_personal_confirmado: id_veterinario },
+      attributes: [
+        "id_tipo_servicio",
+        [Sequelize.fn("YEARWEEK", Sequelize.col("fecha_hora_solicitada")), "semana"],
+        [Sequelize.fn("COUNT", Sequelize.col("Servicios.id")), "cantidad"]
+      ],
+      include: [
+        {
+          model: TiposServicio,
+          as: "tipo_servicio",
+          attributes: ["nombre", "descripcion", "costo"]
+        }
+      ],
+      group: ["id_tipo_servicio", "tipo_servicio.id", "semana"],
+      order: [[Sequelize.fn("YEARWEEK", Sequelize.col("fecha_hora_solicitada")), "ASC"]]
+    });
+  }
+
 }
 
 module.exports = new EstadisticasRepository();
