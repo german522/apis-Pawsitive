@@ -2,11 +2,16 @@ const { VacunaxMascotaRepository, MascotaRepository, VacunaRepository } = requir
 const ApiResponse = require('../utils/ApiResponse');
 const { ValidationError, DatabaseError } = require('sequelize');
 
-// 1️⃣ Añadir vacuna a una mascota (solo veterinarios)
 exports.aplicarVacuna = async (req, res) => {
   try {
     const { id_mascota } = req.params;
     const { id_vacuna, fecha_aplicacion } = req.body;
+
+    // Obtener el ID del veterinario desde el JWT
+    const id_veterinario = req.user?.tipoId;
+    if (!id_veterinario) {
+      return ApiResponse.unauthorized("No se pudo obtener la información del veterinario autenticado.", res);
+    }
 
     if (!id_vacuna) {
       return ApiResponse.validation("El campo id_vacuna es obligatorio.", null, res);
@@ -21,6 +26,7 @@ exports.aplicarVacuna = async (req, res) => {
     const vacunacionData = {
       id_mascota,
       id_vacuna,
+      id_veterinario,
       fecha_aplicacion: fecha_aplicacion || new Date()
     };
 
@@ -39,13 +45,11 @@ exports.aplicarVacuna = async (req, res) => {
   }
 };
 
-// 2️⃣ Actualizar vacuna aplicada (solo veterinarios)
 exports.updateVacunaMascota = async (req, res) => {
   try {
     const { id_mascota, id_vacunacion } = req.params;
     const { id_vacuna, fecha_aplicacion } = req.body;
 
-    // Validación de datos
     if (!id_vacuna && !fecha_aplicacion) {
       return res.status(400).json({
         success: false,
@@ -53,7 +57,6 @@ exports.updateVacunaMascota = async (req, res) => {
       });
     }
 
-    // Buscar el registro
     const registro = await VacunaxMascotaRepository.getById(id_vacunacion);
     if (!registro) {
       return res.status(404).json({
@@ -62,7 +65,6 @@ exports.updateVacunaMascota = async (req, res) => {
       });
     }
 
-    // Verificar que pertenece a la mascota
     if (registro.id_mascota != id_mascota) {
       return res.status(403).json({
         success: false,
@@ -70,12 +72,10 @@ exports.updateVacunaMascota = async (req, res) => {
       });
     }
 
-    // Crear objeto de actualización dinámico
     const updatedData = {};
     if (id_vacuna) updatedData.id_vacuna = id_vacuna;
     if (fecha_aplicacion) updatedData.fecha_aplicacion = fecha_aplicacion;
 
-    // Actualizar
     const updated = await VacunaxMascotaRepository.update(id_vacunacion, updatedData);
 
     return res.status(200).json({
@@ -94,8 +94,6 @@ exports.updateVacunaMascota = async (req, res) => {
   }
 };
 
-
-// 3️⃣ Eliminar vacuna aplicada (solo veterinarios)
 exports.deleteVacunaMascota = async (req, res) => {
   try {
     const { id_mascota, id_vacunacion } = req.params;
@@ -114,7 +112,6 @@ exports.deleteVacunaMascota = async (req, res) => {
   }
 };
 
-// 4️⃣ Obtener todas las vacunas aplicadas de una mascota (usuarios y veterinarios)
 exports.getVacunasByMascotaId = async (req, res) => {
   try {
     const { id_mascota } = req.params;
@@ -130,7 +127,6 @@ exports.getVacunasByMascotaId = async (req, res) => {
   }
 };
 
-// 5️⃣ Obtener detalle de una vacuna aplicada (usuarios y veterinarios)
 exports.getDetalleVacunaMascota = async (req, res) => {
   try {
     const { id_mascota, id_vacunacion } = req.params;

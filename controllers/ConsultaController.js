@@ -1,5 +1,5 @@
 const { ConsultaRepository } = require('../repositories');
-const { Cita, Mascota, Persona } = require('../models');
+const { Cita} = require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 
 const ConsultaController = {
@@ -30,6 +30,7 @@ const ConsultaController = {
       const nuevaConsulta = await ConsultaRepository.crearConsulta({
         id_cita,
         id_mascota: cita.id_mascota,
+        id_veterinario: user.tipoId,
         diagnostico,
         observaciones,
         tratamiento_sugerido,
@@ -46,53 +47,62 @@ const ConsultaController = {
     }
   },
 
-  crearConsultaEmergencia: async (req, res) => {
-    try {
-      const { id_mascota, id_cliente, diagnostico, observaciones, tratamiento_sugerido } = req.body;
-      const user = req.user;
+crearConsultaEmergencia: async (req, res) => {
+  try {
+    const { id_mascota, id_cliente, diagnostico, observaciones, tratamiento_sugerido } = req.body;
+    const user = req.user;
 
-      // Validar rol
-      if (user.tipo !== "veterinario") {
-        return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
-      }
-
-      // Validar body
-      if (!id_mascota || !id_cliente || !diagnostico) {
-        return ApiResponse.validation(
-          "Complete los campos requeridos: id_mascota, id_cliente, diagnostico.",
-          null,
-          res
-        );
-      }
-
-      // Crear consulta SIN cita
-      const nuevaConsulta = await ConsultaRepository.crearConsulta({
-        id_cita: null,
-        id_mascota,
-        diagnostico,
-        observaciones: observaciones || null,
-        tratamiento_sugerido: tratamiento_sugerido || null,
-        fecha_consulta: new Date()
-      });
-
-      return ApiResponse.success(
-        "Consulta de emergencia creada correctamente.",
-        nuevaConsulta,
-        res,
-        201
-      );
-
-    } catch (error) {
-      console.error("Error al crear consulta de emergencia:", error);
-      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
+    // Validar rol
+    if (user.tipo !== "veterinario") {
+      return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
     }
-  },
+
+    // Obtener ID real del veterinario
+    const id_veterinario = user.tipoId; // 🔥 el ID real que está en Veterinarios
+
+    if (!id_veterinario) {
+      return ApiResponse.unauthorized("No se pudo obtener el veterinario autenticado.", res);
+    }
+
+    // Validar body
+    if (!id_mascota || !id_cliente || !diagnostico) {
+      return ApiResponse.validation(
+        "Complete los campos requeridos: id_mascota, id_cliente y diagnostico.",
+        null,
+        res
+      );
+    }
+
+    // Crear la consulta de emergencia
+    const nuevaConsulta = await ConsultaRepository.crearConsulta({
+      id_cita: null,
+      id_mascota,
+      id_cliente,
+      id_veterinario,  // ← Ahora sí es el correcto
+      diagnostico,
+      observaciones: observaciones || null,
+      tratamiento_sugerido: tratamiento_sugerido || null,
+      fecha_consulta: new Date()
+    });
+
+    return ApiResponse.success(
+      "Consulta de emergencia creada correctamente.",
+      nuevaConsulta,
+      res,
+      201
+    );
+
+  } catch (error) {
+    console.error("Error al crear consulta de emergencia:", error);
+    return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
+  }
+},
 
   // Listar todas las consultas (filtradas por tipo de usuario)
 listarConsultasPorUsuario : async (req, res) => {
   try {
-    const { tipo, tipoId } = req.user; // viene del middleware JWT
-    const consultas = await ConsultaRepository.listarConsultasPorUsuario(tipo, tipoId);
+    const { tipoId } = req.user;
+    const consultas = await ConsultaRepository.listarConsultasPorUsuario(tipoId);
 
     if (!consultas.length) {
       return res.status(404).json({ message: 'No se encontraron consultas para este usuario' });
@@ -150,9 +160,6 @@ obtenerConsultasPorMascota: async (req, res) => {
     );
   }
 }
-
-
-
 };
 
 module.exports = ConsultaController;
