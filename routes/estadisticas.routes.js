@@ -12,5 +12,8 @@ router.get("/vacunas-veterinario/semana/:id_veterinario", authenticateToken, Est
 router.get("/ganancias-consultas/semana/:id_veterinario", authenticateToken, EstadisticasController.gananciasConsultasPorSemana);
 router.get("/ganancias-servicios/semana/:id_veterinario", authenticateToken, EstadisticasController.gananciasServiciosPorSemana);
 router.get("/ganancias-totales/:id_veterinario", authenticateToken, EstadisticasController.gananciasTotales);
+router.get("/tipos-servicios", EstadisticasController.cantidadPorTipoServicio);
+router.get("/tipos-servicios/semana", EstadisticasController.cantidadPorTipoServicioPorSemana);
+router.get("/tipos-servicios-veterinario/semana/:id_veterinario", authenticateToken, EstadisticasController.cantidadPorTipoServicioPorVetYSemana);
 
 module.exports = router;
