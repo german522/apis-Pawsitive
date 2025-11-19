@@ -121,6 +121,12 @@ module.exports = (sequelize, DataTypes) => {
       as: "tipo_producto",
       onDelete: "SET NULL",
     });
+
+    Producto.hasMany(models.MovimientoInventario, {
+      foreignKey: "id_producto",
+      as: "movimientos",
+      onDelete: "RESTRICT",
+    });
   };
 
   return Producto;
