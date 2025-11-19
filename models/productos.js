@@ -127,6 +127,12 @@ module.exports = (sequelize, DataTypes) => {
       as: "movimientos",
       onDelete: "RESTRICT",
     });
+
+    Producto.hasMany(models.CarritoItem, {
+      foreignKey: "id_producto",
+      as: "carrito_items",
+      onDelete: "RESTRICT",
+    });
   };
 
   return Producto;
