@@ -52,6 +52,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "vacunasAplicadas",
       onDelete: "SET NULL"
     });
+    Veterinario.hasMany(models.MovimientoInventario, {
+      foreignKey: "id_responsable",
+      as: "movimientos_inventario",
+      onDelete: "RESTRICT",
+    });
   };
 
   return Veterinario;
