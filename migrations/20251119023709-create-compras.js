@@ -3,7 +3,7 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("movimientos_inventario", {
+    await queryInterface.createTable("compras", {
       id: {
         type: Sequelize.INTEGER,
         autoIncrement: true,
@@ -11,18 +11,19 @@ module.exports = {
         allowNull: false,
       },
 
-      id_producto: {
+      id_carrito: {
         type: Sequelize.INTEGER,
         allowNull: false,
+        unique: true,
         references: {
-          model: "productos",
+          model: "carritos",
           key: "id",
         },
         onUpdate: "CASCADE",
         onDelete: "RESTRICT",
       },
 
-      id_responsable: {
+      id_veterinario: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -33,38 +34,33 @@ module.exports = {
         onDelete: "RESTRICT",
       },
 
-      tipo: {
-        type: Sequelize.ENUM(
-          "entrada",
-          "salida",
-          "devolucion",
-          "caducidad",
-          "venta"
-        ),
+      total: {
+        type: Sequelize.DECIMAL(10, 2),
         allowNull: false,
       },
 
-      cantidad: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-      },
-
-      fecha_movimiento: {
+      fecha: {
         type: Sequelize.DATE,
         allowNull: false,
         defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
       },
 
-      motivo: {
-        type: Sequelize.TEXT,
-        allowNull: true,
+      metodo_pago: {
+        type: Sequelize.ENUM("efectivo", "tarjeta"),
+        allowNull: false,
+      },
+
+      estado_pago: {
+        type: Sequelize.ENUM("pendiente", "pagado", "cancelado"),
+        allowNull: false,
+        defaultValue: "pendiente",
       },
     }, {
-      tableName: "movimientos_inventario"
+      tableName: "compras"
     });
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("movimientos_inventario");
+    await queryInterface.dropTable("compras");
   },
 };

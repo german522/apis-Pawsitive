@@ -3,12 +3,24 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("movimientos_inventario", {
+    await queryInterface.createTable("compras_detalle", {
       id: {
         type: Sequelize.INTEGER,
         autoIncrement: true,
         primaryKey: true,
         allowNull: false,
+      },
+
+      id_compra: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: "compras",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
+        unique: "uq_compra_producto", // índice único compuesto
       },
 
       id_producto: {
@@ -20,28 +32,7 @@ module.exports = {
         },
         onUpdate: "CASCADE",
         onDelete: "RESTRICT",
-      },
-
-      id_responsable: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: "veterinarios",
-          key: "id",
-        },
-        onUpdate: "CASCADE",
-        onDelete: "RESTRICT",
-      },
-
-      tipo: {
-        type: Sequelize.ENUM(
-          "entrada",
-          "salida",
-          "devolucion",
-          "caducidad",
-          "venta"
-        ),
-        allowNull: false,
+        unique: "uq_compra_producto", // índice único compuesto
       },
 
       cantidad: {
@@ -49,22 +40,16 @@ module.exports = {
         allowNull: false,
       },
 
-      fecha_movimiento: {
-        type: Sequelize.DATE,
+      precio_unitario: {
+        type: Sequelize.DECIMAL(10, 2),
         allowNull: false,
-        defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-      },
-
-      motivo: {
-        type: Sequelize.TEXT,
-        allowNull: true,
       },
     }, {
-      tableName: "movimientos_inventario"
+      tableName: "compras_detalle"
     });
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("movimientos_inventario");
+    await queryInterface.dropTable("compras_detalle");
   },
 };
