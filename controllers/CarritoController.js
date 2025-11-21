@@ -29,12 +29,16 @@ const CarritoController = {
       const id_cliente = req.user.id;
 
       const carrito = await Carrito.findOne({
-        where: { id_cliente, estado: "abierto" },
-        include: [{
-          model: CarritoItem,
-          include: [{ model: Producto }]
-        }]
-      });
+  where: { id_cliente, estado: "abierto" },
+  include: [{
+    model: CarritoItem,
+    as: "items",          
+    include: [{ 
+      model: Producto,
+      as: "producto"  
+    }]
+  }]
+});
 
       if (!carrito) return res.status(404).json({ message: "No hay carrito activo" });
 
@@ -54,6 +58,10 @@ const CarritoController = {
         where: { id_cliente, estado: "abierto" },
       });
       if (!carrito) return res.status(404).json({ message: "No hay carrito activo" });
+
+      const producto = await Producto.findByPk(id_producto);
+      if (!producto) return res.status(404).json({ message: "Producto no encontrado" });
+
 
       const item = await CarritoItem.findOne({
         where: { id_carrito: carrito.id, id_producto },
@@ -120,29 +128,35 @@ const CarritoController = {
   },
 
   // 6️⃣ Obtener resumen y total de carrito cerrado (previo a compra)
-  obtenerResumenCarrito: async (req, res) => {
-    try {
-      const id_cliente = req.user.id;
+obtenerResumenCarrito: async (req, res) => {
+  try {
+    const id_cliente = req.user.id;
 
-      const carrito = await Carrito.findOne({
-        where: { id_cliente, estado: "cerrado" },
-        include: [{
+    const carrito = await Carrito.findOne({
+      where: { id_cliente, estado: "cerrado" },
+      include: [
+        {
           model: CarritoItem,
-          include: [{ model: Producto }]
-        }]
-      });
+          as: "items", // 👈 alias obligatorio
+          include: [
+            { model: Producto, as: "producto" } // 👈 alias obligatorio
+          ]
+        }
+      ]
+    });
 
-      if (!carrito) return res.status(404).json({ message: "No hay carrito cerrado" });
+    if (!carrito) return res.status(404).json({ message: "No hay carrito cerrado" });
 
-      const total = carrito.CarritoItems.reduce((sum, item) => {
-        return sum + (item.cantidad * item.Producto.precio);
-      }, 0);
+    // 👇 Calcular total usando alias (producto)
+    const total = carrito.items.reduce((sum, item) => {
+      return sum + (item.cantidad * item.producto.precio);
+    }, 0);
 
-      res.json({ carrito, total });
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  },
+    res.json({ carrito, total });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+},
 
   // 7️⃣ Cerrar carrito
   cerrarCarrito: async (req, res) => {
