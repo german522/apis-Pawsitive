@@ -9,6 +9,10 @@ router.post("/login", validateLogin, AuthController.login);
 router.post("/refresh", AuthController.refreshToken);
 router.post("/verify-code", AuthController.verifyCode);
 
+// Recuperación de contraseña
+router.post("/forgot-password", AuthController.forgotPassword);
+router.post("/reset-password", AuthController.resetPassword);
+
 // Rutas protegidas (requieren autenticación)
 router.get("/verify", authenticateToken, AuthController.verifyToken);
 
