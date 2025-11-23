@@ -4,6 +4,8 @@ const { sequelize } = require('../models');
 const { pendingVerifications } = require('./ClienteController');
 const AuthUtils = require('../utils/auth');
 const { ValidationError, DatabaseError } = require('sequelize');
+const crypto = require('crypto');
+const emailService = require('../utils/emailService');
 
 const MAX_ATTEMPTS = 5;
 
@@ -201,6 +203,92 @@ exports.login = async (req, res) => {
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
+
+// Solicitar recuperación de contraseña
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return ApiResponse.validation("El correo es requerido.", null, res);
+    }
+
+    const email = String(correo).toLowerCase().trim();
+
+    const persona = await PersonaRepository.getByCorreo(email);
+
+    if (!persona || !persona.verificado) {
+      return ApiResponse.success(
+        "Si el correo está registrado, se enviará un enlace para recuperar la contraseña.",
+        null,
+        res
+      );
+    }
+
+    // Generar token aleatorio
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    // Guardar token y expiración en la persona
+    await PersonaRepository.saveResetToken(persona.id, token, expiresAt);
+
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetLink = `${baseUrl}/reset-password?token=${token}`;
+
+    await emailService.sendPasswordResetEmail(persona.correo, resetLink);
+
+    return ApiResponse.success(
+      "Si el correo está registrado, se enviará un enlace para recuperar la contraseña.",
+      null,
+      res
+    );
+  } catch (error) {
+    console.error("Error en POST /auth/forgot-password:", error);
+    return ApiResponse.error("Error al procesar la solicitud de recuperación.", res);
+  }
+};
+
+// Establecer nueva contraseña usando token
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, nuevaContrasena } = req.body;
+
+    if (!token || !nuevaContrasena) {
+      return ApiResponse.validation(
+        "Token y nueva contraseña son requeridos.",
+        null,
+        res
+      );
+    }
+
+    // Buscar persona por token
+    const persona = await PersonaRepository.findByResetToken(token);
+    if (!persona) {
+      return ApiResponse.validation("Token inválido o ya utilizado.", null, res);
+    }
+
+    // Verificar expiración
+    if (!persona.reset_token_expires || persona.reset_token_expires < new Date()) {
+      return ApiResponse.validation("El token ha expirado. Solicita una nueva recuperación.", null, res);
+    }
+
+    // Hashear nueva contraseña
+    const hashedPassword = await AuthUtils.hashPassword(nuevaContrasena);
+
+    // Actualizar contraseña y limpiar token
+    await PersonaRepository.resetPassword(persona.id, hashedPassword);
+
+    return ApiResponse.success(
+      "Contraseña actualizada correctamente. Ya puedes iniciar sesión con tu nueva contraseña.",
+      null,
+      res
+    );
+  } catch (error) {
+    console.error("Error en POST /auth/reset-password:", error);
+    return ApiResponse.error("Error al restablecer la contraseña.", res);
+  }
+};
+
 
 // Verificar token
 exports.verifyToken = async (req, res) => {
