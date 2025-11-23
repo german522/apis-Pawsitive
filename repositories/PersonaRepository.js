@@ -31,7 +31,6 @@ class PersonaRepository {
 
     async deletePersona(id, transaction) {
         try {
-            // Las relaciones se eliminarán automáticamente por CASCADE
             await Persona.destroy({ where: { id }, transaction });
         } catch (error) {
             throw error;
@@ -39,7 +38,7 @@ class PersonaRepository {
     }
 
     async getByCorreo(correo) {
-        return await Persona.findOne({ 
+        return await Persona.findOne({
             where: { correo },
             include: [
                 { model: Cliente, as: 'cliente' },
@@ -51,10 +50,10 @@ class PersonaRepository {
     async getPersonasClientes() {
         return await Persona.findAll({
             include: [
-                { 
-                    model: Cliente, 
+                {
+                    model: Cliente,
                     as: 'cliente',
-                    required: true // Solo personas que son clientes
+                    required: true
                 }
             ]
         });
@@ -63,10 +62,10 @@ class PersonaRepository {
     async getPersonasVeterinarios() {
         return await Persona.findAll({
             include: [
-                { 
-                    model: Veterinario, 
+                {
+                    model: Veterinario,
                     as: 'veterinario',
-                    required: true // Solo personas que son veterinarios
+                    required: true
                 }
             ]
         });
@@ -84,6 +83,34 @@ class PersonaRepository {
             console.error("Error al actualizar imagen de persona:", error);
             throw error;
         }
+    }
+    async saveResetToken(personaId, token, expiresAt) {
+        const persona = await Persona.findByPk(personaId);
+        if (!persona) return null;
+
+        await persona.update({
+            reset_token: token,
+            reset_token_expires: expiresAt
+        });
+
+        return persona;
+    }
+    async findByResetToken(token) {
+        return await Persona.findOne({
+            where: { reset_token: token }
+        });
+    }
+    async resetPassword(personaId, newHashedPassword) {
+        const persona = await Persona.findByPk(personaId);
+        if (!persona) return null;
+
+        await persona.update({
+            contrasena: newHashedPassword,
+            reset_token: null,
+            reset_token_expires: null
+        });
+
+        return persona;
     }
 }
 
