@@ -64,6 +64,65 @@ function buildVerificationHtml(code) {
   `;
 }
 
+function buildPasswordResetHtml(resetLink) {
+  return `
+  <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+              background-color:#f9faf9;
+              padding:32px;
+              border-radius:12px;
+              max-width:480px;
+              margin:auto;
+              border:1px solid #e3e3e3;
+              box-shadow:0 3px 10px rgba(0,0,0,0.05);">
+
+    <div style="text-align:center;margin-bottom:24px;">
+      <img src="https://res.cloudinary.com/dzxi5k6ez/image/upload/v1760911319/PAWSITIVE_VIBES_2_nt3js7.png" alt="PawsitiveVibes Logo"
+           style="width:90px;height:90px;object-fit:contain;border-radius:50%;"/>
+    </div>
+
+    <h2 style="color:#2E7D32;text-align:center;margin:0;font-size:22px;">
+      🐾 Recuperación de contraseña
+    </h2>
+
+    <p style="color:#444;text-align:center;margin:16px 0 8px;font-size:15px;">
+      Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en <strong>PawsitiveVibes</strong>.
+    </p>
+
+    <p style="color:#444;text-align:center;margin:8px 0 16px;font-size:14px;">
+      Haz clic en el siguiente botón para establecer una nueva contraseña:
+    </p>
+
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${resetLink}"
+         style="display:inline-block;
+                background-color:#43A047;
+                color:#ffffff;
+                text-decoration:none;
+                font-weight:bold;
+                font-size:15px;
+                padding:12px 28px;
+                border-radius:24px;">
+        Restablecer contraseña
+      </a>
+    </div>
+
+    <p style="color:#666;text-align:center;margin:8px 0 24px;font-size:13px;">
+      Este enlace será válido por <strong>1 hora</strong>.<br>
+      Si tú no solicitaste este cambio, puedes ignorar este mensaje.
+    </p>
+
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+    <p style="text-align:center;color:#888;font-size:12px;">
+      <strong style="color:#FFB74D;">PawsitiveVibes 🐾</strong><br>
+      Cuidamos a tus mascotas con amor y confianza 💚<br>
+      <span style="color:#A5A5A5;">${FROM}</span>
+    </p>
+  </div>
+  `;
+}
+
+
 /**
  * Envia un correo con código de verificación.
  * @param {Object} params
@@ -95,6 +154,39 @@ async function enviarCorreoVerificacion({ to, code, idempotencyKey }) {
     const details = error?.response?.data || error?.message || error;
     console.error('Error enviando correo (Resend):', details);
     throw new Error('No se pudo enviar el correo de verificación');
+  }
+}
+
+async function sendPasswordResetEmail(to, resetLink) {
+  if (provider !== 'resend') {
+    throw new Error(`EMAIL_PROVIDER no soportado: ${provider}`);
+  }
+  if (!to) throw new Error('sendPasswordResetEmail: falta "to"');
+  if (!resetLink) throw new Error('sendPasswordResetEmail: falta "resetLink"');
+
+  const subject = 'Recuperación de contraseña - PawsitiveVibes';
+
+  try {
+    const res = await resend.emails.send({
+      from: `PawsitiveVibes <${FROM}>`,
+      to,
+      subject,
+      html: buildPasswordResetHtml(resetLink),
+      text: `
+Has solicitado restablecer tu contraseña en PawsitiveVibes.
+
+Abre este enlace en tu navegador para establecer una nueva contraseña:
+${resetLink}
+
+Si no fuiste tú, puedes ignorar este mensaje.
+      `.trim()
+    });
+
+    return res;
+  } catch (error) {
+    const details = error?.response?.data || error?.message || error;
+    console.error('Error enviando correo de recuperación:', details);
+    throw new Error('No se pudo enviar el correo de recuperación de contraseña');
   }
 }
 
@@ -176,11 +268,11 @@ function buildCitaCanceladaHtmlVeterinario(d) {
  * }}} params
  */
 async function enviarCorreoCitaAgendada({ data }) {
-  const subjectCliente    = `Tu cita está confirmada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
-  const subjectVeterinario= `Nueva cita asignada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
+  const subjectCliente = `Tu cita está confirmada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
+  const subjectVeterinario = `Nueva cita asignada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
 
   const textBase =
-`Mascota: ${data.mascotaNombre}
+    `Mascota: ${data.mascotaNombre}
 Fecha: ${data.fecha}
 Hora: ${data.hora}
 Veterinario: ${data.veterinarioNombre}
@@ -222,11 +314,11 @@ Motivo: ${data.motivo || '-'}`;
  * }}} params
  */
 async function enviarCorreoCitaCancelada({ data }) {
-  const subjectCliente    = `Cita cancelada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
-  const subjectVeterinario= `Cancelación de cita • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
+  const subjectCliente = `Cita cancelada • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
+  const subjectVeterinario = `Cancelación de cita • ${data.mascotaNombre} • ${data.fecha} ${data.hora}`;
 
   const textBase =
-`Mascota: ${data.mascotaNombre}
+    `Mascota: ${data.mascotaNombre}
 Fecha: ${data.fecha}
 Hora: ${data.hora}
 Veterinario: ${data.veterinarioNombre}
@@ -259,6 +351,9 @@ Motivo (original): ${data.motivo || '-'}`;
   }
 }
 
-module.exports = { enviarCorreoVerificacion };
-module.exports.enviarCorreoCitaAgendada = enviarCorreoCitaAgendada;
-module.exports.enviarCorreoCitaCancelada = enviarCorreoCitaCancelada;
+module.exports = {
+  enviarCorreoVerificacion,
+  enviarCorreoCitaAgendada,
+  enviarCorreoCitaCancelada,
+  sendPasswordResetEmail
+};
