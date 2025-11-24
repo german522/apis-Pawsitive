@@ -214,37 +214,50 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const email = String(correo).toLowerCase().trim();
-
     const persona = await PersonaRepository.getByCorreo(email);
 
-    if (!persona || !persona.verificado) {
-      return ApiResponse.success(
-        "Si el correo está registrado, se enviará un enlace para recuperar la contraseña.",
+    if (!persona) {
+      return ApiResponse.validation(
+        "Correo no existente o inválido.",
+        null,
+        res
+      );
+    }
+
+    if (!persona.verificado) {
+      return ApiResponse.validation(
+        "El correo existe pero no está verificado.",
         null,
         res
       );
     }
 
     // Generar token aleatorio
-    const token = crypto.randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
     // Guardar token y expiración en la persona
     await PersonaRepository.saveResetToken(persona.id, token, expiresAt);
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetLink = `${baseUrl}/reset-password?token=${token}`;
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetLink = `${baseUrl}/reset-password/${token}`;
 
+    // Enviar correo
     await emailService.sendPasswordResetEmail(persona.correo, resetLink);
+    // o si prefieres: await emailService.sendPasswordResetEmail(email, resetLink);
 
     return ApiResponse.success(
-      "Si el correo está registrado, se enviará un enlace para recuperar la contraseña.",
+      "Revisa tu bandeja de entrada, el correo para recuperar tu contraseña fue enviado.",
       null,
       res
     );
   } catch (error) {
     console.error("Error en POST /auth/forgot-password:", error);
-    return ApiResponse.error("Error al procesar la solicitud de recuperación.", res);
+    return ApiResponse.error(
+      "Error al procesar la solicitud de recuperación.",
+      error.message,
+      res
+    );
   }
 };
 
