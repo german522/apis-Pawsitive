@@ -251,31 +251,45 @@ exports.forgotPassword = async (req, res) => {
 // Establecer nueva contraseña usando token
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, nuevaContrasena } = req.body;
+    const { token, nuevaContrasena, confirmarContrasena } = req.body;
 
-    if (!token || !nuevaContrasena) {
+    // 1. Validación de campos requeridos
+    if (!token || !nuevaContrasena || !confirmarContrasena) {
       return ApiResponse.validation(
-        "Token y nueva contraseña son requeridos.",
+        "Token, nueva contraseña y confirmación son requeridos.",
         null,
         res
       );
     }
 
-    // Buscar persona por token
+    // 2. Validación: contraseñas iguales
+    if (nuevaContrasena !== confirmarContrasena) {
+      return ApiResponse.validation(
+        "Las contraseñas no coinciden.",
+        null,
+        res
+      );
+    }
+
+    // 3. Buscar persona por token
     const persona = await PersonaRepository.findByResetToken(token);
     if (!persona) {
       return ApiResponse.validation("Token inválido o ya utilizado.", null, res);
     }
 
-    // Verificar expiración
+    // 4. Verificar expiración
     if (!persona.reset_token_expires || persona.reset_token_expires < new Date()) {
-      return ApiResponse.validation("El token ha expirado. Solicita una nueva recuperación.", null, res);
+      return ApiResponse.validation(
+        "El token ha expirado. Solicita una nueva recuperación.",
+        null,
+        res
+      );
     }
 
-    // Hashear nueva contraseña
+    // 5. Hashear nueva contraseña
     const hashedPassword = await AuthUtils.hashPassword(nuevaContrasena);
 
-    // Actualizar contraseña y limpiar token
+    // 6. Actualizar contraseña y limpiar token
     await PersonaRepository.resetPassword(persona.id, hashedPassword);
 
     return ApiResponse.success(
@@ -283,6 +297,7 @@ exports.resetPassword = async (req, res) => {
       null,
       res
     );
+
   } catch (error) {
     console.error("Error en POST /auth/reset-password:", error);
     return ApiResponse.error("Error al restablecer la contraseña.", res);
