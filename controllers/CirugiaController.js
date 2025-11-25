@@ -137,6 +137,6 @@ exports.actualizarHorasCirugia = async (req, res) => {
     return ApiResponse.success("Fecha y hora de la cirugía actualizadas correctamente.", cirugiaActualizada, res);
   } catch (error) {
     console.error("Error al actualizar fecha y hora de cirugía:", error);
-    return ApiResponse.error("Error al actualizar fecha y hora de cirugía.", res, 500, error.message);
+    return ApiResponse.error("Error al actualizar fecha y hora de cirugía.", res, 500, error.message); //solo para hacer un commit
   }
 };
