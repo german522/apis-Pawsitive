@@ -114,6 +114,77 @@ exports.verifyCode = async (req, res) => {
   }
 };
 
+// Reenviar código de verificación
+exports.resendVerificationCode = async (req, res) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return ApiResponse.validation(
+        "El correo es requerido.",
+        null,
+        res
+      );
+    }
+
+    const email = String(correo).toLowerCase().trim();
+
+    // Buscar registro pendiente en memoria
+    const pending = pendingVerifications.get(email);
+
+    if (!pending) {
+      const persona = await PersonaRepository.getByCorreo(email);
+
+      if (persona && persona.verificado) {
+        return ApiResponse.validation(
+          "Este correo ya está verificado. Ya puedes iniciar sesión.",
+          null,
+          res
+        );
+      }
+
+      return ApiResponse.notFound(
+        "No hay un registro pendiente para este correo. Inicia el registro nuevamente.",
+        res
+      );
+    }
+
+    // Generar nuevo código de 6 dígitos
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Nueva expiración: 15 minutos (igual que en el correo)
+    const now = new Date();
+    const expiration = new Date(now.getTime() + 15 * 60 * 1000);
+
+    // Actualizar datos del registro pendiente
+    pending.codigoVerificacion = codigo;
+    pending.codigoPlano = codigo;
+    pending.codigoExpiracion = expiration;
+    pending.attempts = 0;
+
+    pendingVerifications.set(email, pending);
+
+    // Enviar correo con el nuevo código
+    await emailService.enviarCorreoVerificacion({
+      to: pending.correo || email,
+      code: codigo,
+      idempotencyKey: `resend-verification-${email}-${Date.now()}`
+    });
+
+    return ApiResponse.success(
+      "Se ha reenviado un nuevo código de verificación a tu correo.",
+      null,
+      res
+    );
+  } catch (error) {
+    console.error("Error en POST /auth/resend-verification-code:", error);
+    return ApiResponse.error(
+      "Error al reenviar el código de verificación.",
+      res
+    );
+  }
+};
+
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
   try {
