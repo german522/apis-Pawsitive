@@ -1,13 +1,25 @@
 const ProductoRepository = require("../repositories/ProductoRepository");
-const ApiResponse = require("../utils/ApiResponse");
 
 const ProductoController = {
+  // 4. POST /productos
   crearProducto: async (req, res) => {
-    if (req.user.tipo !== "veterinario") {
-        return ApiResponse.error("Solo veterinarios pueden crear productos", res, 403);
-    }
     try {
+      const idVeterinario = req.usuario.id; 
       const {
+        id_categoria,
+        id_especie,
+        id_tipo_producto,
+        nombre,
+        descripcion,
+        precio,
+        stock_inicial = 0,
+        presentacion,
+        unidad_medida,
+        fecha_caducidad,
+        requiere_receta = false
+      } = req.body;
+
+      const dataProducto = {
         id_categoria,
         id_especie,
         id_tipo_producto,
@@ -18,192 +30,142 @@ const ProductoController = {
         unidad_medida,
         fecha_caducidad,
         requiere_receta
-      } = req.body;
-
-      if (!id_categoria || !nombre || !precio) {
-        return ApiResponse.validation(
-          "Faltan campos obligatorios: id_categoria, nombre, precio.",
-          null,
-          res
-        );
-      }
-
-      const payload = {
-        id_categoria,
-        id_especie: id_especie || null,
-        id_tipo_producto: id_tipo_producto || null,
-        nombre,
-        descripcion: descripcion || null,
-        precio,
-        presentacion: presentacion || null,
-        unidad_medida: unidad_medida || null,
-        fecha_caducidad: fecha_caducidad || null,
-        requiere_receta: requiere_receta === "true" || requiere_receta === true ? true : false
       };
-      const nuevo = await ProductoRepository.create(payload);
 
-      return ApiResponse.success("Producto creado correctamente.", nuevo, res);
-    } catch (error) {
-      console.error("crearProducto error:", error);
-      return ApiResponse.error("Error creando producto.", res, 500, error.message);
+      const nuevo = await ProductoRepository.crearProducto(dataProducto, Number(stock_inicial), idVeterinario);
+      return res.status(201).json(nuevo);
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ message: err.message || "Error al crear producto" });
     }
   },
 
-  adjuntarImagenes: async (req, res) => {
-  if (req.user.tipo !== "veterinario") {
-    return ApiResponse.error("Solo veterinarios pueden adjuntar imágenes", res, 403);
-  }
+  // 4.5 POST /productos/:id/imagenes (single image)
+  adjuntarImagen: async (req, res) => {
     try {
-      const { id } = req.params;
+      const idProducto = req.params.id;
+      const idVeterinario = req.usuario.id;
 
-      const urls = [];
-      if (req.files && Array.isArray(req.files)) {
-        for (const f of req.files) {
-          const url = f.secure_url || f.url || f.path || f.location;
-          if (url) urls.push(url);
-        }
-      } else if (req.file) {
-        const f = req.file;
-        const url = f.secure_url || f.url || f.path || f.location;
-        if (url) urls.push(url);
-      } else if (req.body && req.body.imagenUrls) {
-        const parsed = typeof req.body.imagenUrls === "string" ? JSON.parse(req.body.imagenUrls) : req.body.imagenUrls;
-        if (Array.isArray(parsed)) parsed.forEach(u => urls.push(u));
-      }
+      // multer + cloudinary deben poner la url en req.file.path o req.file.secure_url o req.file.path
+      if (!req.file) return res.status(400).json({ message: "No se envió imagen" });
 
-      if (urls.length === 0) {
-        return ApiResponse.validation("No se encontraron imágenes para adjuntar.", null, res);
-      }
+      // Ajusta según cómo tu middleware coloque la URL. Aquí se asume req.file.path es la URL (CloudinaryStorage suele usar path)
+      const url = req.file.path || req.file.secure_url || req.file.url || (req.file && req.file.location);
 
-      const productoActualizado = await ProductoRepository.updateImages(id, urls);
-      if (!productoActualizado) return ApiResponse.notFound("Producto no encontrado.", null, res);
-
-      return ApiResponse.success("Imágenes adjuntadas correctamente.", productoActualizado, res);
-    } catch (error) {
-      console.error("adjuntarImagenes error:", error);
-      return ApiResponse.error("Error adjuntando imágenes.", res, 500, error.message);
+      const producto = await ProductoRepository.adjuntarImagen(idProducto, url, idVeterinario);
+      return res.status(200).json(producto);
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ message: err.message || "Error al adjuntar imagen" });
     }
   },
 
+  // 5. GET /productos  (veterinario: obtiene generales)
   obtenerProductos: async (req, res) => {
-    if (req.user.tipo !== "veterinario") {
-    return ApiResponse.error("Solo veterinarios pueden observar todos los productos", res, 403);
-  }
     try {
-      const { page, limit } = req.query;
-      const data = await ProductoRepository.findAll({ page, limit });
-
-      return ApiResponse.success("Productos obtenidos.", data, res);
-    } catch (error) {
-      console.error("obtenerProductos error:", error);
-      return ApiResponse.error("Error obteniendo productos.", res, 500, error.message);
+      const filtros = {
+        categoria: req.query.categoria,
+        especie: req.query.especie,
+        tipo_producto: req.query.tipo_producto,
+        estado: req.query.estado
+      };
+      const productos = await ProductoRepository.obtenerProductos({ filtros });
+      return res.json(productos);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error al obtener productos" });
     }
   },
 
-  obtenerProductosRestringidos: async (req, res) => {
-  if (req.user.tipo !== "veterinario") {
-    return ApiResponse.error("Solo veterinarios pueden ver productos restringidos", res, 403);
-  }
+  // 6. GET /productos/restringidos  (veterinarios)
+  obtenerRestringidos: async (req, res) => {
     try {
-      const { id_categoria, id_especie, id_tipo_producto, categoriaNombre, especieNombre, tipoNombre, page, limit } = req.query;
-
       const filtros = {
-        id_categoria,
-        id_especie,
-        id_tipo_producto,
-        categoriaNombre,
-        especieNombre,
-        tipoNombre
+        categoria: req.query.categoria,
+        especie: req.query.especie,
+        tipo_producto: req.query.tipo_producto
+      };
+      const productos = await ProductoRepository.obtenerRestringidos({ filtros });
+      return res.json(productos);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error al obtener productos restringidos" });
+    }
+  },
+
+  // 7. GET /productos/libres (clientes)
+  obtenerLibres: async (req, res) => {
+    try {
+      const filtros = {
+        id_categoria: req.query.categoria,
+        id_especie: req.query.especie,
+        id_tipo_producto: req.query.tipo_producto
       };
 
-      const result = await ProductoRepository.findByFilters(filtros, { page, limit });
+      // Map query names to what ProductoRepository espera (simple)
+      const productos = await ProductoRepository.obtenerLibres({
+        filtros: {
+          id_categoria: req.query.categoria,
+          id_especie: req.query.especie,
+          id_tipo_producto: req.query.tipo_producto
+        }
+      });
 
-      const rows = result.rows.filter(p => p.requiere_receta === true);
-
-      return ApiResponse.success("Productos restringidos obtenidos.", { ...result, rows }, res);
-    } catch (error) {
-      console.error("obtenerProductosRestringidos error:", error);
-      return ApiResponse.error("Error obteniendo productos restringidos.", res, 500, error.message);
+      return res.json(productos);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error al obtener productos libres" });
     }
   },
 
-  obtenerProductosLibres: async (req, res) => {
+  // 8. GET /productos/:id
+  detalleProducto: async (req, res) => {
     try {
-      const { id_categoria, id_especie, id_tipo_producto, categoriaNombre, especieNombre, tipoNombre, page, limit } = req.query;
-
-      const filtros = {
-        id_categoria,
-        id_especie,
-        id_tipo_producto,
-        categoriaNombre,
-        especieNombre,
-        tipoNombre
-      };
-
-      const result = await ProductoRepository.findByFilters(filtros, { page, limit });
-
-      const rows = result.rows.filter(p => p.requiere_receta === false);
-
-      return ApiResponse.success("Productos de venta libre obtenidos.", { ...result, rows }, res);
-    } catch (error) {
-      console.error("obtenerProductosLibres error:", error);
-      return ApiResponse.error("Error obteniendo productos de venta libre.", res, 500, error.message);
+      const producto = await ProductoRepository.obtenerPorId(req.params.id);
+      if (!producto) return res.status(404).json({ message: "Producto no encontrado" });
+      return res.json(producto);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error al obtener detalle" });
     }
   },
 
-  obtenerDetalle: async (req, res) => {
+  // 9. PUT /productos/:id
+  actualizarProducto: async (req, res) => {
     try {
-      const { id } = req.params;
-      const producto = await ProductoRepository.findById(id);
-      if (!producto) return ApiResponse.notFound("Producto no encontrado.", null, res);
-
-      const p = producto.toJSON();
-      try {
-        p.URL_imagen = p.URL_imagen ? JSON.parse(p.URL_imagen) : [];
-      } catch (e) {
-        p.URL_imagen = p.URL_imagen ? [p.URL_imagen] : [];
-      }
-
-      return ApiResponse.success("Detalle de producto obtenido.", p, res);
-    } catch (error) {
-      console.error("obtenerDetalle error:", error);
-      return ApiResponse.error("Error obteniendo detalle de producto.", res, 500, error.message);
+      const idVeterinario = req.usuario.id;
+      const cambios = req.body;
+      const actualizado = await ProductoRepository.actualizarProducto(req.params.id, cambios, idVeterinario);
+      return res.json(actualizado);
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ message: err.message || "Error al actualizar producto" });
     }
   },
 
-    actualizarProducto: async (req, res) => {
-    if (req.user.tipo !== "veterinario") {
-        return ApiResponse.error("Solo veterinarios pueden actualizar productos", res, 403);
-    }
+  // 10. DELETE /productos/:id
+  eliminarProducto: async (req, res) => {
     try {
-      const { id } = req.params;
-      const payload = { ...req.body };
-
-      if ("stock_actual" in payload) delete payload.stock_actual;
-
-      const updated = await ProductoRepository.updateById(id, payload);
-      if (!updated) return ApiResponse.notFound("Producto no encontrado o no actualizado.", null, res);
-
-      return ApiResponse.success("Producto actualizado correctamente.", null, res);
-    } catch (error) {
-      console.error("actualizarProducto error:", error);
-      return ApiResponse.error("Error actualizando producto.", res, 500, error.message);
+      const idVeterinario = req.usuario.id;
+      const eliminado = await ProductoRepository.eliminarProducto(req.params.id, idVeterinario);
+      return res.json({ message: "Producto inactivado", producto: eliminado });
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ message: err.message || "Error al eliminar producto" });
     }
   },
 
-    eliminarProducto: async (req, res) => {
-    if (req.user.tipo !== "veterinario") {
-        return ApiResponse.error("Solo veterinarios pueden eliminar productos", res, 403);
-    }
+  // 14. GET /productos/stock-bajo
+  productosStockBajo: async (req, res) => {
     try {
-      const { id } = req.params;
-      const updated = await ProductoRepository.softDeleteById(id);
-      if (!updated) return ApiResponse.notFound("Producto no encontrado o ya inactivo.", null, res);
-
-      return ApiResponse.success("Producto marcado como inactivo (eliminado).", null, res);
-    } catch (error) {
-      console.error("eliminarProducto error:", error);
-      return ApiResponse.error("Error eliminando producto.", res, 500, error.message);
+      const umbral = req.query.umbral ? Number(req.query.umbral) : 5;
+      const lista = await ProductoRepository.obtenerStockBajo({ umbral });
+      // opcional: notificar
+      // if (lista.length > 0) NotificationService.sendLowStockAlert(lista)
+      return res.json(lista);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Error al consultar stock bajo" });
     }
   }
 };
