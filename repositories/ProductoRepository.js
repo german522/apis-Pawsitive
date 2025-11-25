@@ -1,127 +1,191 @@
-const { Producto, Categoria, Especie, TipoProducto } = require("../models");
+const { Producto, sequelize } = require("../models");
+const MovimientoInventarioRepository = require("./MovimientoInventarioRepository");
 
 class ProductoRepository {
-  async create(data) {
-    try {
-      const producto = await Producto.create(data);
+  // Crear producto + movimiento entrada (transaccional)
+  async crearProducto(dataProducto, cantidadInicial, idVeterinario) {
+    return await sequelize.transaction(async (t) => {
+      const nuevo = await Producto.create(
+        {
+          ...dataProducto,
+          stock_actual: cantidadInicial
+        },
+        { transaction: t }
+      );
+
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: nuevo.id,
+          id_responsable: idVeterinario,
+          tipo: "entrada",
+          cantidad: cantidadInicial,
+          motivo: "Registro inicial de producto"
+        },
+        { transaction: t }
+      );
+
+      return nuevo;
+    });
+  }
+
+  // Adjuntar imagen (solo actualiza URL_imagen) + movimiento (cantidad 0)
+  async adjuntarImagen(idProducto, urlImagen, idVeterinario) {
+    return await sequelize.transaction(async (t) => {
+      const producto = await Producto.findByPk(idProducto, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
+
+      producto.URL_imagen = urlImagen;
+      await producto.save({ transaction: t });
+
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: producto.id,
+          id_responsable: idVeterinario,
+          tipo: "entrada",
+          cantidad: 0,
+          motivo: "Imagen agregada al producto"
+        },
+        { transaction: t }
+      );
+
       return producto;
-    } catch (error) {
-      throw new Error("ProductoRepository.create: " + error.message);
-    }
+    });
   }
 
-  async updateById(id, data) {
-    try {
-      const [updated] = await Producto.update(data, { where: { id } });
-      return updated; // 0 | 1
-    } catch (error) {
-      throw new Error("ProductoRepository.updateById: " + error.message);
-    }
+  // Obtener productos (uso veterinario: todos, con filtros)
+  async obtenerProductos({ filtros = {}, limit = 50, offset = 0 } = {}) {
+    const where = { };
+    if (filtros.categoria) where.id_categoria = filtros.categoria;
+    if (filtros.especie) where.id_especie = filtros.especie;
+    if (filtros.tipo_producto) where.id_tipo_producto = filtros.tipo_producto;
+    if (filtros.estado) where.estado = filtros.estado;
+
+    return await Producto.findAll({
+      where,
+      limit,
+      offset,
+      order: [["nombre", "ASC"]]
+    });
   }
 
-  async softDeleteById(id) {
-    try {
-      const [updated] = await Producto.update({ estado: "inactivo" }, { where: { id } });
-      return updated;
-    } catch (error) {
-      throw new Error("ProductoRepository.softDeleteById: " + error.message);
-    }
+  // Obtener productos restringidos (requiere_receta = true) - veterinarios
+  async obtenerRestringidos({ filtros = {}, limit = 50, offset = 0 } = {}) {
+    return this.obtenerProductos({
+      filtros: { ...filtros, requiere_receta: true, estado: "activo" },
+      limit,
+      offset
+    });
   }
 
-  async findById(id) {
-    try {
-      return await Producto.findByPk(id, {
-        include: [
-          { model: Categoria, as: "categoria" },
-          { model: Especie, as: "especie" },
-          { model: TipoProducto, as: "tipo_producto" }
-        ]
-      });
-    } catch (error) {
-      throw new Error("ProductoRepository.findById: " + error.message);
-    }
+  // Obtener productos libre (requiere_receta = false) - clientes
+  async obtenerLibres({ filtros = {}, limit = 50, offset = 0 } = {}) {
+    return Producto.findAll({
+      where: {
+        ...filtros,
+        requiere_receta: false,
+        estado: "activo"
+      },
+      limit,
+      offset,
+      order: [["nombre", "ASC"]]
+    });
   }
 
-  async findAll({ page = 1, limit = 50 } = {}) {
-    try {
-      const offset = (Number(page) - 1) * Number(limit);
-      const { rows, count } = await Producto.findAndCountAll({
-        include: [
-          { model: Categoria, as: "categoria" },
-          { model: Especie, as: "especie" },
-          { model: TipoProducto, as: "tipo_producto" }
-        ],
-        order: [["id", "ASC"]],
-        offset,
-        limit: Number(limit)
-      });
-
-      return { rows, count, page: Number(page), limit: Number(limit) };
-    } catch (error) {
-      throw new Error("ProductoRepository.findAll: " + error.message);
-    }
+  async obtenerPorId(id) {
+    return await Producto.findByPk(id);
   }
 
-  async findByFilters(filtros = {}, { page = 1, limit = 50 } = {}) {
-    try {
-      const where = {};
-      if (filtros.id_categoria) where.id_categoria = filtros.id_categoria;
-      if (filtros.id_especie) where.id_especie = filtros.id_especie;
-      if (filtros.id_tipo_producto) where.id_tipo_producto = filtros.id_tipo_producto;
+  // Actualizar producto (solo veterinario) + movimiento (cantidad 0)
+  async actualizarProducto(id, cambios, idVeterinario) {
+    return await sequelize.transaction(async (t) => {
+      const producto = await Producto.findByPk(id, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
 
-      const include = [
-        { model: Categoria, as: "categoria", where: {}, required: false },
-        { model: Especie, as: "especie", where: {}, required: false },
-        { model: TipoProducto, as: "tipo_producto", where: {}, required: false }
-      ];
+      // Si cambias stock_actual manualmente, podríamos registrar movimiento de ajuste.
+      const prevStock = producto.stock_actual;
+      if (typeof cambios.stock_actual !== "undefined" && cambios.stock_actual !== prevStock) {
+        // Ajuste de stock -> registramos entrada o salida según el caso
+        const diff = cambios.stock_actual - prevStock;
+        const tipo = diff > 0 ? "entrada" : "salida";
+        const cantidad = Math.abs(diff);
 
-      if (filtros.categoriaNombre) include[0].where.nombre = filtros.categoriaNombre;
-      if (filtros.especieNombre) include[1].where.nombre = filtros.especieNombre;
-      if (filtros.tipoNombre) include[2].where.nombre = filtros.tipoNombre;
+        // Actualizamos stock aquí
+        producto.stock_actual = cambios.stock_actual;
+        // aplicamos otros cambios
+        delete cambios.stock_actual;
+        Object.assign(producto, cambios);
+        await producto.save({ transaction: t });
 
-      include.forEach((inc) => {
-        if (!inc.where || Object.keys(inc.where).length === 0) delete inc.where;
-      });
+        await MovimientoInventarioRepository.crearMovimiento(
+          {
+            id_producto: producto.id,
+            id_responsable: idVeterinario,
+            tipo,
+            cantidad,
+            motivo: "Ajuste de stock por actualización de producto"
+          },
+          { transaction: t }
+        );
 
-      const offset = (Number(page) - 1) * Number(limit);
-      const { rows, count } = await Producto.findAndCountAll({
-        where,
-        include,
-        order: [["id", "ASC"]],
-        offset,
-        limit: Number(limit)
-      });
-
-      return { rows, count, page: Number(page), limit: Number(limit) };
-    } catch (error) {
-      throw new Error("ProductoRepository.findByFilters: " + error.message);
-    }
-  }
-
-  async updateImages(id, urls = []) {
-    try {
-      const producto = await Producto.findByPk(id);
-      if (!producto) return null;
-
-      let existing = producto.URL_imagen;
-      let images = [];
-
-      try {
-        images = existing ? JSON.parse(existing) : [];
-        if (!Array.isArray(images)) images = [];
-      } catch (e) {
-        images = existing ? [String(existing)] : [];
+        return producto;
       }
 
-      images = images.concat(urls);
+      // Si no hay cambio de stock, solo actualizamos y registramos movimiento genérico
+      Object.assign(producto, cambios);
+      await producto.save({ transaction: t });
 
-      producto.URL_imagen = JSON.stringify(images);
-      await producto.save();
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: producto.id,
+          id_responsable: idVeterinario,
+          tipo: "entrada", // marcamos como entrada semántica (puede ser 0 cantidad)
+          cantidad: 0,
+          motivo: "Actualización de datos del producto"
+        },
+        { transaction: t }
+      );
 
       return producto;
-    } catch (error) {
-      throw new Error("ProductoRepository.updateImages: " + error.message);
-    }
+    });
+  }
+
+  // "Eliminar" producto -> marcar inactivo + registrar salida con stock_actual
+  async eliminarProducto(id, idVeterinario) {
+    return await sequelize.transaction(async (t) => {
+      const producto = await Producto.findByPk(id, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
+
+      const stock = producto.stock_actual || 0;
+      producto.estado = "inactivo";
+      producto.stock_actual = 0;
+      await producto.save({ transaction: t });
+
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: producto.id,
+          id_responsable: idVeterinario,
+          tipo: "salida",
+          cantidad: stock,
+          motivo: "Eliminación/inactivación de producto"
+        },
+        { transaction: t }
+      );
+
+      return producto;
+    });
+  }
+
+  // Productos bajos en stock
+  async obtenerStockBajo({ umbral = 5, limit = 100, offset = 0 } = {}) {
+    return await Producto.findAll({
+      where: {
+        stock_actual: { [require("sequelize").Op.lte]: umbral },
+        estado: "activo"
+      },
+      limit,
+      offset,
+      order: [["stock_actual", "ASC"]]
+    });
   }
 }
 
