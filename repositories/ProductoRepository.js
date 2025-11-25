@@ -25,28 +25,26 @@ class ProductoRepository {
 }
 
   // Adjuntar imagen (solo actualiza URL_imagen) + movimiento (cantidad 0)
-  async adjuntarImagen(idProducto, urlImagen, idVeterinario) {
-    return await sequelize.transaction(async (t) => {
-      const producto = await Producto.findByPk(idProducto, { transaction: t });
-      if (!producto) throw new Error("Producto no encontrado");
+ async adjuntarImagen(id, url) {
+  return await sequelize.transaction(async (t) => {
+    const producto = await Producto.findByPk(id, { transaction: t });
 
-      producto.URL_imagen = urlImagen;
-      await producto.save({ transaction: t });
+    if (!producto) {
+      throw new Error("Producto no encontrado");
+    }
 
-      await MovimientoInventarioRepository.crearMovimiento(
-        {
-          id_producto: producto.id,
-          id_responsable: idVeterinario,
-          tipo: "entrada",
-          cantidad: 0,
-          motivo: "Imagen agregada al producto"
-        },
-        { transaction: t }
-      );
+    // Asignar solo el string
+    producto.URL_imagen = url;
 
-      return producto;
-    });
-  }
+    // Obligamos a marcar el campo como modificado
+    producto.changed("URL_imagen", true);
+
+    await producto.save({ transaction: t });
+
+    return producto;
+  });
+}
+
 
   // Obtener productos (uso veterinario: todos, con filtros)
   async obtenerProductos({ filtros = {}, limit = 50, offset = 0 } = {}) {
