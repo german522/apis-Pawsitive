@@ -3,30 +3,26 @@ const MovimientoInventarioRepository = require("./MovimientoInventarioRepository
 
 class ProductoRepository {
   // Crear producto + movimiento entrada (transaccional)
-  async crearProducto(dataProducto, cantidadInicial, idVeterinario) {
-    return await sequelize.transaction(async (t) => {
-      const nuevo = await Producto.create(
-        {
-          ...dataProducto,
-          stock_actual: cantidadInicial
-        },
-        { transaction: t }
-      );
+  async crearProducto(data, idResponsable) {
+  return await sequelize.transaction(async (t) => {
+    // 1. Crear producto
+    const producto = await Producto.create(data, { transaction: t });
 
-      await MovimientoInventarioRepository.crearMovimiento(
-        {
-          id_producto: nuevo.id,
-          id_responsable: idVeterinario,
-          tipo: "entrada",
-          cantidad: cantidadInicial,
-          motivo: "Registro inicial de producto"
-        },
-        { transaction: t }
-      );
+    // 2. Crear movimiento de inventario
+    await MovimientoInventarioRepository.crearMovimiento(
+      {
+        id_producto: producto.id,
+        id_responsable: idResponsable, // 👈 ESTE ERA EL FALTANTE
+        tipo: "entrada",
+        cantidad: data.stock_actual || 0,
+        motivo: "Registro inicial del producto"
+      },
+      { transaction: t }
+    );
 
-      return nuevo;
-    });
-  }
+    return producto;
+  });
+}
 
   // Adjuntar imagen (solo actualiza URL_imagen) + movimiento (cantidad 0)
   async adjuntarImagen(idProducto, urlImagen, idVeterinario) {
