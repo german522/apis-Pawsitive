@@ -21,28 +21,31 @@ const ProductoController = {
     return ApiResponse.error("Error al crear producto", res);
   }
 },
-
-
-    // 4.5 Subir imagen
+    //4.5 subir imagen del producto
     subirImagen: async (req, res) => {
-        try {
-            const productoId = req.params.id;
+  try {
+    const { id } = req.params;
 
-            if (!req.file || !req.file.path) {
-                return ApiResponse.validation("No se recibió la imagen", null, res);
-            }
+    if (!req.file || !req.file.path) {
+      return ApiResponse.validation("No se envió ninguna imagen", null, res);
+    }
 
-            const url_imagen = req.file.path;
+    const resultado = await ProductoRepository.adjuntarImagen(id, req.file.path);
 
-            const actualizado = await ProductoRepository.update(productoId, { url_imagen });
+    if (!resultado) {
+      return ApiResponse.notFound("Producto no encontrado", res);
+    }
 
-            return ApiResponse.success("Imagen subida correctamente", { url_imagen }, res);
-        } catch (error) {
-            return ApiResponse.error("Error al subir imagen", res, 500, error);
-        }
-    },
+    return ApiResponse.success("Imagen subida correctamente", resultado, res);
+  } catch (error) {
+    console.error("ERROR SUBIR IMAGEN:", error);
+    return ApiResponse.error("Error al subir imagen", res, 500, error);
+  }
+},
 
-    // 5. Productos generales
+
+
+// 5. Productos generales
     obtenerGenerales: async (req, res) => {
         try {
             const productos = await ProductoRepository.findAll();
