@@ -1,5 +1,5 @@
 const ProductoRepository = require("../repositories/ProductoRepository");
-const MovimientoRepository = require("../repositories/MovimientoRepository");
+const MovimientoRepository = require("../repositories/MovimientoInventarioRepository");
 const ApiResponse = require("../utils/ApiResponse");
 
 const ProductoController = {
