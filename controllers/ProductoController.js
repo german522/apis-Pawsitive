@@ -6,21 +6,22 @@ const ProductoController = {
 
     // 4. Crear producto
     crearProducto: async (req, res) => {
-        try {
-            const nuevo = await ProductoRepository.create(req.body);
+  try {
+    const idResponsable = req.user?.tipoId; // viene del JWT
 
-            await MovimientoRepository.registrar({
-                id_producto: nuevo.id,
-                tipo_movimiento: "CREACIÓN",
-                descripcion: `Producto creado: ${nuevo.nombre}`,
-                cantidad: req.body.stock || 0
-            });
+    if (!idResponsable) {
+      return ApiResponse.error("Falta idResponsable", res, 400);
+    }
 
-            return ApiResponse.success("Producto creado correctamente", nuevo, res);
-        } catch (error) {
-            return ApiResponse.error("Error al crear producto", res, 500, error);
-        }
-    },
+    const producto = await ProductoRepository.crearProducto(req.body, idResponsable);
+
+    return ApiResponse.success("Producto creado correctamente", producto, res, 201);
+  } catch (error) {
+    console.error(error);
+    return ApiResponse.error("Error al crear producto", res);
+  }
+},
+
 
     // 4.5 Subir imagen
     subirImagen: async (req, res) => {
