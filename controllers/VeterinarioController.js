@@ -46,8 +46,8 @@ exports.register = async (req, res) => {
     }
 
     const hashedPassword = await AuthUtils.hashPassword(contrasena);
-    const codigoVerificacion = VerificationUtils.generateCode(); 
-    const codigoExpiracion = VerificationUtils.generateExpirationDate(); 
+    const codigoVerificacion = VerificationUtils.generateCode();
+    const codigoExpiracion = VerificationUtils.generateExpirationDate();
 
     pendingVerifications.set(email, {
       tipo: 'veterinario',
@@ -60,7 +60,7 @@ exports.register = async (req, res) => {
       URL_imagen: URL_imagen?.trim() || null,
       cedula: cedula?.trim(),
       especialidad: especialidad?.trim() || null,
-      codigoVerificacion, 
+      codigoVerificacion,
       codigoExpiracion,
       attempts: 0,
       lastSentAt: now
@@ -102,7 +102,7 @@ exports.logout = async (req, res) => {
 // Eliminar cuenta de veterinario
 exports.deleteAccount = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const veterinarioId = req.user.tipoId; // ID del veterinario desde el token
     const personaId = req.user.id; // ID de la persona desde el token
@@ -116,7 +116,7 @@ exports.deleteAccount = async (req, res) => {
 
     // Eliminar veterinario
     await VeterinarioRepository.deleteVeterinario(veterinarioId, transaction);
-    
+
     // Eliminar persona
     await PersonaRepository.deletePersona(personaId, transaction);
 
@@ -127,7 +127,7 @@ exports.deleteAccount = async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error("Error en DELETE /veterinarios/account:", error);
-    
+
     if (error instanceof DatabaseError) {
       return ApiResponse.error("Error en la base de datos.", res);
     }
@@ -140,7 +140,7 @@ exports.deleteAccount = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     const veterinarioId = req.user.tipoId;
-    
+
     const veterinario = await VeterinarioRepository.getById(veterinarioId);
     if (!veterinario) {
       return ApiResponse.notFound("Veterinario no encontrado.", res);
@@ -193,7 +193,7 @@ exports.updateProfile = async (req, res) => {
 
   } catch (error) {
     console.error("Error en PUT /veterinarios/profile:", error);
-    
+
     if (error instanceof ValidationError) {
       return ApiResponse.validation(error.errors.map(e => e.message), null, res);
     }
@@ -222,7 +222,7 @@ exports.getAllClientes = async (req, res) => {
 exports.getClienteById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const cliente = await ClienteRepository.getById(id);
     if (!cliente) {
       return ApiResponse.notFound("Cliente no encontrado.", res);
@@ -263,7 +263,7 @@ exports.getAll = async (req, res) => {
 exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const veterinario = await VeterinarioRepository.getById(id);
     if (!veterinario) {
       return ApiResponse.notFound("Veterinario no encontrado.", res);
