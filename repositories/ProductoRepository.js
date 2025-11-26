@@ -91,83 +91,92 @@ class ProductoRepository {
 
   // Actualizar producto (solo veterinario) + movimiento (cantidad 0)
   async actualizarProducto(id, cambios, idVeterinario) {
-    return await sequelize.transaction(async (t) => {
-      const producto = await Producto.findByPk(id, { transaction: t });
-      if (!producto) throw new Error("Producto no encontrado");
+  return await sequelize.transaction(async (t) => {
+    const producto = await Producto.findByPk(id, { transaction: t });
+    if (!producto) throw new Error("Producto no encontrado");
 
-      // Si cambias stock_actual manualmente, podríamos registrar movimiento de ajuste.
-      const prevStock = producto.stock_actual;
-      if (typeof cambios.stock_actual !== "undefined" && cambios.stock_actual !== prevStock) {
-        // Ajuste de stock -> registramos entrada o salida según el caso
-        const diff = cambios.stock_actual - prevStock;
-        const tipo = diff > 0 ? "entrada" : "salida";
-        const cantidad = Math.abs(diff);
+    const prevStock = producto.stock_actual;
 
-        // Actualizamos stock aquí
-        producto.stock_actual = cambios.stock_actual;
-        // aplicamos otros cambios
-        delete cambios.stock_actual;
-        Object.assign(producto, cambios);
-        await producto.save({ transaction: t });
+    // Si viene stock_actual en el body → lo usamos como incremento o decremento
+    if (typeof cambios.stock_actual !== "undefined") {
+      const incremento = Number(cambios.stock_actual);
 
-        await MovimientoInventarioRepository.crearMovimiento(
-          {
-            id_producto: producto.id,
-            id_responsable: idVeterinario,
-            tipo,
-            cantidad,
-            motivo: "Ajuste de stock por actualización de producto"
-          },
-          { transaction: t }
-        );
+      // Nuevo stock = actual en BD + lo enviado
+      const nuevoStock = prevStock + incremento;
 
-        return producto;
-      }
+      // Determinar movimiento
+      const tipo = incremento > 0 ? "entrada" : "salida";
+      const cantidad = Math.abs(incremento);
 
-      // Si no hay cambio de stock, solo actualizamos y registramos movimiento genérico
+      // Actualizamos stock
+      producto.stock_actual = nuevoStock;
+
+      // Quitamos stock_actual del objeto de cambios
+      delete cambios.stock_actual;
+
+      // Aplicamos los demás cambios
       Object.assign(producto, cambios);
       await producto.save({ transaction: t });
 
+      // Registramos movimiento
       await MovimientoInventarioRepository.crearMovimiento(
         {
           id_producto: producto.id,
           id_responsable: idVeterinario,
-          tipo: "entrada", // marcamos como entrada semántica (puede ser 0 cantidad)
-          cantidad: 0,
-          motivo: "Actualización de datos del producto"
+          tipo,
+          cantidad,
+          motivo: "Ajuste de stock (incremento/decremento)"
         },
         { transaction: t }
       );
 
       return producto;
-    });
-  }
+    }
+
+    // Si no viene stock en cambios → actualización normal
+    Object.assign(producto, cambios);
+    await producto.save({ transaction: t });
+
+    await MovimientoInventarioRepository.crearMovimiento(
+      {
+        id_producto: producto.id,
+        id_responsable: idVeterinario,
+        tipo: "entrada",
+        cantidad: 0,
+        motivo: "Actualización de datos del producto (sin cambio de stock)"
+      },
+      { transaction: t }
+    );
+
+    return producto;
+  });
+}
+
 
   // "Eliminar" producto -> marcar inactivo + registrar salida con stock_actual
   async eliminarProducto(id, idVeterinario) {
     return await sequelize.transaction(async (t) => {
-      const producto = await Producto.findByPk(id, { transaction: t });
-      if (!producto) throw new Error("Producto no encontrado");
+        const producto = await Producto.findByPk(id, { transaction: t });
+        if (!producto) throw new Error("Producto no encontrado");
 
-      const stock = producto.stock_actual || 0;
-      producto.estado = "inactivo";
-      producto.stock_actual = 0;
-      await producto.save({ transaction: t });
+        // Registrar salida de todas las unidades antes de eliminar
+        await MovimientoInventarioRepository.crearMovimiento(
+            {
+                id_producto: id,
+                id_responsable: idVeterinario,
+                tipo: "salida",
+                cantidad: producto.stock_actual,
+                motivo: "Eliminación/inactivación de producto"
+            },
+            { transaction: t }
+        );
 
-      await MovimientoInventarioRepository.crearMovimiento(
-        {
-          id_producto: producto.id,
-          id_responsable: idVeterinario,
-          tipo: "salida",
-          cantidad: stock,
-          motivo: "Eliminación/inactivación de producto"
-        },
-        { transaction: t }
-      );
+        await producto.destroy({ transaction: t });
 
-      return producto;
+        return producto;
     });
-  }
+}
+
 
   // Productos bajos en stock
   async obtenerStockBajo({ umbral = 5, limit = 100, offset = 0 } = {}) {
