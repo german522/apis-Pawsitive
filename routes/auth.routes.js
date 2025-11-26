@@ -3,6 +3,8 @@ const router = express.Router();
 const AuthController = require("../controllers/AuthController");
 const { authenticateToken } = require("../middlewares/auth");
 const { validateLogin } = require("../middlewares/validation");
+const ClienteController = require("../controllers/ClienteController");
+const VeterinarioController = require("../controllers/VeterinarioController");
 
 // Rutas públicas (sin autenticación)
 router.post("/login", validateLogin, AuthController.login);
