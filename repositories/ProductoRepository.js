@@ -1,68 +1,85 @@
-const { Producto, sequelize } = require("../models");
+const { Producto, Categoria, Especie, TipoProducto, sequelize } = require("../models");
 const MovimientoInventarioRepository = require("./MovimientoInventarioRepository");
 
+// Centralizamos los includes para no repetirlos N veces
+const productoIncludes = [
+  { model: Categoria, as: "categoria", attributes: ["id", "nombre"] },
+  { model: Especie, as: "especie", attributes: ["id", "nombre"] },
+  { model: TipoProducto, as: "tipo_producto", attributes: ["id", "nombre"] }
+];
+
 class ProductoRepository {
-  // Crear producto + movimiento entrada (transaccional)
+
+  // ===========================
+  // CREAR PRODUCTO
+  // ===========================
   async crearProducto(data, idResponsable) {
-  return await sequelize.transaction(async (t) => {
-    // 1. Crear producto
-    const producto = await Producto.create(data, { transaction: t });
+    return await sequelize.transaction(async (t) => {
+      const producto = await Producto.create(data, { transaction: t });
 
-    // 2. Crear movimiento de inventario
-    await MovimientoInventarioRepository.crearMovimiento(
-      {
-        id_producto: producto.id,
-        id_responsable: idResponsable, // 👈 ESTE ERA EL FALTANTE
-        tipo: "entrada",
-        cantidad: data.stock_actual || 0,
-        motivo: "Registro inicial del producto"
-      },
-      { transaction: t }
-    );
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: producto.id,
+          id_responsable: idResponsable,
+          tipo: "entrada",
+          cantidad: data.stock_actual || 0,
+          motivo: "Registro inicial del producto"
+        },
+        { transaction: t }
+      );
 
-    return producto;
-  });
-}
+      return await Producto.findByPk(producto.id, {
+        include: productoIncludes,
+        transaction: t
+      });
+    });
+  }
 
-  // Adjuntar imagen (solo actualiza URL_imagen) + movimiento (cantidad 0)
- async adjuntarImagen(id, url) {
-  return await sequelize.transaction(async (t) => {
-    const producto = await Producto.findByPk(id, { transaction: t });
+  // ===========================
+  // ADJUNTAR IMAGEN
+  // ===========================
+  async adjuntarImagen(id, url) {
+    return await sequelize.transaction(async (t) => {
+      const producto = await Producto.findByPk(id, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
 
-    if (!producto) {
-      throw new Error("Producto no encontrado");
-    }
+      producto.URL_imagen = url;
+      producto.changed("URL_imagen", true);
+      await producto.save({ transaction: t });
 
-    // Asignar solo el string
-    producto.URL_imagen = url;
+      return await Producto.findByPk(id, {
+        include: productoIncludes,
+        transaction: t
+      });
+    });
+  }
 
-    // Obligamos a marcar el campo como modificado
-    producto.changed("URL_imagen", true);
-
-    await producto.save({ transaction: t });
-
-    return producto;
-  });
-}
-
-
-  // Obtener productos (uso veterinario: todos, con filtros)
+  // ===========================
+  // OBTENER PRODUCTOS
+  // ===========================
   async obtenerProductos({ filtros = {}, limit = 50, offset = 0 } = {}) {
-    const where = { };
+
+    const where = {};
+
     if (filtros.categoria) where.id_categoria = filtros.categoria;
     if (filtros.especie) where.id_especie = filtros.especie;
     if (filtros.tipo_producto) where.id_tipo_producto = filtros.tipo_producto;
+    if (typeof filtros.requiere_receta !== "undefined")
+      where.requiere_receta = filtros.requiere_receta;
     if (filtros.estado) where.estado = filtros.estado;
 
     return await Producto.findAll({
       where,
       limit,
       offset,
+      include: productoIncludes,
       order: [["nombre", "ASC"]]
     });
   }
 
-  // Obtener productos restringidos (requiere_receta = true) - veterinarios
+  // ===========================
+  // RESTRINGIDOS (RECETA)
+  // ===========================
   async obtenerRestringidos({ filtros = {}, limit = 50, offset = 0 } = {}) {
     return this.obtenerProductos({
       filtros: { ...filtros, requiere_receta: true, estado: "activo" },
@@ -71,120 +88,132 @@ class ProductoRepository {
     });
   }
 
-  // Obtener productos libre (requiere_receta = false) - clientes
+  // ===========================
+  // LIBRES (SIN RECETA)
+  // ===========================
   async obtenerLibres({ filtros = {}, limit = 50, offset = 0 } = {}) {
-    return Producto.findAll({
+    return await Producto.findAll({
       where: {
         ...filtros,
         requiere_receta: false,
         estado: "activo"
       },
+      include: productoIncludes,
       limit,
       offset,
       order: [["nombre", "ASC"]]
     });
   }
 
+  // ===========================
+  // OBTENER POR ID
+  // ===========================
   async obtenerPorId(id) {
-    return await Producto.findByPk(id);
+    return await Producto.findByPk(id, {
+      include: productoIncludes
+    });
   }
 
-  // Actualizar producto (solo veterinario) + movimiento (cantidad 0)
+  // ===========================
+  // ACTUALIZAR PRODUCTO
+  // ===========================
   async actualizarProducto(id, cambios, idVeterinario) {
-  return await sequelize.transaction(async (t) => {
-    const producto = await Producto.findByPk(id, { transaction: t });
-    if (!producto) throw new Error("Producto no encontrado");
+    return await sequelize.transaction(async (t) => {
 
-    const prevStock = producto.stock_actual;
+      const producto = await Producto.findByPk(id, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
 
-    // Si viene stock_actual en el body → lo usamos como incremento o decremento
-    if (typeof cambios.stock_actual !== "undefined") {
-      const incremento = Number(cambios.stock_actual);
+      const prevStock = producto.stock_actual;
 
-      // Nuevo stock = actual en BD + lo enviado
-      const nuevoStock = prevStock + incremento;
+      // Ajuste de stock
+      if (typeof cambios.stock_actual !== "undefined") {
+        const incremento = Number(cambios.stock_actual);
+        const nuevoStock = prevStock + incremento;
 
-      // Determinar movimiento
-      const tipo = incremento > 0 ? "entrada" : "salida";
-      const cantidad = Math.abs(incremento);
+        const tipo = incremento > 0 ? "entrada" : "salida";
+        const cantidad = Math.abs(incremento);
 
-      // Actualizamos stock
-      producto.stock_actual = nuevoStock;
+        producto.stock_actual = nuevoStock;
 
-      // Quitamos stock_actual del objeto de cambios
-      delete cambios.stock_actual;
+        delete cambios.stock_actual;
+        Object.assign(producto, cambios);
 
-      // Aplicamos los demás cambios
+        await producto.save({ transaction: t });
+
+        await MovimientoInventarioRepository.crearMovimiento(
+          {
+            id_producto: producto.id,
+            id_responsable: idVeterinario,
+            tipo,
+            cantidad,
+            motivo: "Ajuste de stock"
+          },
+          { transaction: t }
+        );
+
+        return await Producto.findByPk(producto.id, {
+          include: productoIncludes,
+          transaction: t
+        });
+      }
+
+      // Actualización normal
       Object.assign(producto, cambios);
       await producto.save({ transaction: t });
 
-      // Registramos movimiento
       await MovimientoInventarioRepository.crearMovimiento(
         {
           id_producto: producto.id,
           id_responsable: idVeterinario,
-          tipo,
-          cantidad,
-          motivo: "Ajuste de stock (incremento/decremento)"
+          tipo: "entrada",
+          cantidad: 0,
+          motivo: "Actualización de datos"
         },
         { transaction: t }
       );
 
-      return producto;
-    }
+      return await Producto.findByPk(producto.id, {
+        include: productoIncludes,
+        transaction: t
+      });
+    });
+  }
 
-    // Si no viene stock en cambios → actualización normal
-    Object.assign(producto, cambios);
-    await producto.save({ transaction: t });
-
-    await MovimientoInventarioRepository.crearMovimiento(
-      {
-        id_producto: producto.id,
-        id_responsable: idVeterinario,
-        tipo: "entrada",
-        cantidad: 0,
-        motivo: "Actualización de datos del producto (sin cambio de stock)"
-      },
-      { transaction: t }
-    );
-
-    return producto;
-  });
-}
-
-
-  // "Eliminar" producto -> marcar inactivo + registrar salida con stock_actual
+  // ===========================
+  // ELIMINAR PRODUCTO
+  // ===========================
   async eliminarProducto(id, idVeterinario) {
     return await sequelize.transaction(async (t) => {
-        const producto = await Producto.findByPk(id, { transaction: t });
-        if (!producto) throw new Error("Producto no encontrado");
+      const producto = await Producto.findByPk(id, { transaction: t });
+      if (!producto) throw new Error("Producto no encontrado");
 
-        // Registrar salida de todas las unidades antes de eliminar
-        await MovimientoInventarioRepository.crearMovimiento(
-            {
-                id_producto: id,
-                id_responsable: idVeterinario,
-                tipo: "salida",
-                cantidad: producto.stock_actual,
-                motivo: "Eliminación/inactivación de producto"
-            },
-            { transaction: t }
-        );
+      await MovimientoInventarioRepository.crearMovimiento(
+        {
+          id_producto: id,
+          id_responsable: idVeterinario,
+          tipo: "salida",
+          cantidad: producto.stock_actual,
+          motivo: "Eliminación de producto"
+        },
+        { transaction: t }
+      );
 
-        await producto.destroy({ transaction: t });
+      await producto.destroy({ transaction: t });
 
-        return producto;
+      return producto; // si quieres devolver con includes, te lo agrego
     });
-}
+  }
 
-
-  // Productos bajos en stock
-  async obtenerStockBajo({ umbral = 5, limit = 100, offset = 0 } = {}) {
+  // ===========================
+  // STOCK BAJO
+  // ===========================
+  async obtenerStockBajo({ umbral = 5, limit = 50, offset = 0 } = {}) {
     return await Producto.findAll({
       where: {
-        stock_actual: { [require("sequelize").Op.lte]: umbral },
+        stock_actual: { [Op.lt]: umbral },
         estado: "activo"
       },
+      include: productoIncludes,
       limit,
       offset,
       order: [["stock_actual", "ASC"]]
