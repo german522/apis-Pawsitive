@@ -43,17 +43,17 @@ const ProductoController = {
   }
 },
 
-
-
 // 5. Productos generales
-    obtenerGenerales: async (req, res) => {
-        try {
-            const productos = await ProductoRepository.findAll();
-            return ApiResponse.success("Productos obtenidos correctamente", productos, res);
-        } catch (error) {
-            return ApiResponse.error("Error al obtener productos", res, 500, error);
-        }
-    },
+    obtenerProductos: async (req, res) => {
+  try {
+    const productos = await ProductoRepository.obtenerProductos();
+
+    return ApiResponse.success("Productos obtenidos correctamente", productos, res);
+  } catch (error) {
+    console.error("ERROR OBTENER PRODUCTOS:", error);
+    return ApiResponse.error("Error al obtener productos", res, 500, error);
+  }
+},
 
     // 6. Venta restringida
     obtenerRestringidos: async (req, res) => {
@@ -81,7 +81,7 @@ const ProductoController = {
     obtenerDetalle: async (req, res) => {
         try {
             const id = req.params.id;
-            const producto = await ProductoRepository.findById(id);
+            const producto = await ProductoRepository.obtenerPorId(id);
 
             if (!producto) {
                 return ApiResponse.notFound("Producto no encontrado", res);
@@ -96,15 +96,14 @@ const ProductoController = {
     // 9. Actualizar producto
     actualizarProducto: async (req, res) => {
         try {
-            const id = req.params.id;
-            const actualizado = await ProductoRepository.update(id, req.body);
+            const id = req.params.id;               // ID del producto
+            const idVeterinario = req.user.tipoId;  // ID del veterinario (FK correcta)
 
-            await MovimientoRepository.registrar({
-                id_producto: id,
-                tipo_movimiento: "ACTUALIZACIÓN",
-                descripcion: "Producto actualizado",
-                cantidad: req.body.stock ?? null
-            });
+            const actualizado = await ProductoRepository.actualizarProducto(
+                id,
+                req.body,
+                idVeterinario
+            );
 
             return ApiResponse.success("Producto actualizado correctamente", actualizado, res);
         } catch (error) {
@@ -114,23 +113,38 @@ const ProductoController = {
 
     // 10. Eliminar producto
     eliminarProducto: async (req, res) => {
-        try {
-            const id = req.params.id;
+    try {
+        const id = req.params.id;
+        const idVeterinario = req.user.tipoId;
 
-            await ProductoRepository.delete(id);
+        // 1. Eliminar producto (tu repo registrará movimiento principal si lo tienes así)
+        await ProductoRepository.eliminarProducto(id, idVeterinario);
 
-            await MovimientoRepository.registrar({
-                id_producto: id,
-                tipo_movimiento: "ELIMINACIÓN",
-                descripcion: "Producto eliminado",
-                cantidad: 0
-            });
+        // 2. Registrar movimiento general (si de verdad quieres también este)
+        await MovimientoRepository.crearMovimiento({
+            id_producto: id,
+            id_responsable: idVeterinario,
+            tipo_movimiento: "ELIMINACIÓN",
+            descripcion: "Producto eliminado",
+            cantidad: 0
+        });
 
-            return ApiResponse.success("Producto eliminado correctamente", null, res);
-        } catch (error) {
-            return ApiResponse.error("Error al eliminar producto", res, 500, error);
-        }
-    },
+        return ApiResponse.success(
+            "Producto eliminado correctamente",
+            null,
+            res
+        );
+
+    } catch (error) {
+        return ApiResponse.error(
+            "Error al eliminar producto",
+            res,
+            500,
+            error
+        );
+    }
+},
+
 
     // 12. Listado de movimientos
     obtenerMovimientos: async (req, res) => {

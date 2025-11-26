@@ -11,7 +11,7 @@ router.post("/registrar-producto", authenticateToken, requireVeterinario, Produc
 router.post("/:id/subir-imagen-producto", authenticateToken, requireVeterinario, uploadProducto.single("imagen"), ProductoController.subirImagen);
 
 // 5. Obtener productos generales (solo veterinario)
-router.get("/obtener-productos-general", authenticateToken, requireVeterinario, ProductoController.obtenerGenerales);
+router.get("/obtener-productos-general", authenticateToken, requireVeterinario, ProductoController.obtenerProductos);
 
 // 6. Productos venta restringida (solo veterinario)
 router.get("/obtener-restringidos", authenticateToken, requireVeterinario, ProductoController.obtenerRestringidos);
