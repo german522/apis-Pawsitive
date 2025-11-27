@@ -44,13 +44,6 @@ module.exports = {
         defaultValue: 0
       }
     });
-
-    // Añadir índice compuesto
-    await queryInterface.addConstraint('productos_consulta', {
-      fields: ['id_consulta', 'id_producto'],
-      type: 'unique',
-      name: 'unique_producto_por_consulta'
-    });
   },
   async down(queryInterface, Sequelize) {
     await queryInterface.dropTable('productos_consulta');
