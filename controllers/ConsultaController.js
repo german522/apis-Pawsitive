@@ -1,7 +1,8 @@
-const { ConsultaRepository, ProductoConsultaRepository } = require('../repositories');
+const { ConsultaRepository, ProductoConsultaRepository } = require('../repositories'); 
 const { Cita, sequelize } = require('../models'); 
 const ApiResponse = require('../utils/ApiResponse');
 const RecetaUtils = require('../utils/RecetaUtils'); 
+
 
 
 const ConsultaController = {

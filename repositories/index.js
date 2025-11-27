@@ -9,6 +9,9 @@ const TiposServicioRepository = require('./tiposServicioRepository');
 const ServicioRepository = require('./serviciosRepository');
 const ExpedienteRepository = require('./ExpedienteRepository');
 const CirugiaRepository = require('./CirugiaRepository');
+const MovimientoInventarioRepository = require('./MovimientoInventarioRepository');
+const ProductoConsultaRepository = require('./ProductoConsultaRepository');
+const ProductoRepository = require('./ProductoRepository');
 
 
 module.exports = {
@@ -22,5 +25,8 @@ module.exports = {
     TiposServicioRepository,
     ServicioRepository,
     ExpedienteRepository,
-    CirugiaRepository
+    CirugiaRepository,
+    MovimientoInventarioRepository,
+    ProductoConsultaRepository,
+    ProductoRepository
 };
