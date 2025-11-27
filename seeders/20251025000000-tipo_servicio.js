@@ -3,7 +3,6 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.bulkInsert("tiposservicio", [
-      // 🩺 Servicios médicos generales
       {
         nombre: "Vacunación",
         descripcion:
@@ -52,8 +51,6 @@ module.exports = {
           "Internamiento para cuidados médicos intensivos o tratamientos prolongados.",
         costo: 800.0,
       },
-
-      // ✂️ Servicios estéticos y de bienestar
       {
         nombre: "Baño y corte de pelo",
         descripcion:
@@ -84,8 +81,6 @@ module.exports = {
           "Aplicación de pipetas o baños medicados para eliminar pulgas y garrapatas.",
         costo: 280.0,
       },
-
-      // 🧬 Servicios especializados
       {
         nombre: "Esterilización / Castración",
         descripcion:
@@ -116,8 +111,6 @@ module.exports = {
           "Atención médica inmediata ante accidentes o enfermedades graves.",
         costo: 1200.0,
       },
-
-      // 🏠 Servicios complementarios
       {
         nombre: "Guardería",
         descripcion:

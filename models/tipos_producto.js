@@ -18,6 +18,7 @@ module.exports = (sequelize, DataTypes) => {
       nombre: {
         type: DataTypes.STRING(100),
         allowNull: false,
+        unique: "uq_categoria_tipo"
       },
     },
     {
