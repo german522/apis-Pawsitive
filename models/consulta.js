@@ -64,6 +64,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "veterinario",
       onDelete: "SET NULL"
     });
+    Consulta.hasMany(models.ProductoConsulta, {
+      foreignKey: "id_consulta",
+      as: "productos_consulta",
+      onDelete: "CASCADE"
+    });
   };
 
   return Consulta;
