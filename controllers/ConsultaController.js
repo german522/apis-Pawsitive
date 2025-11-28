@@ -1,24 +1,23 @@
-const { ConsultaRepository, ProductoConsultaRepository } = require('../repositories'); 
+const { ConsultaRepository, ProductoConsultaRepository, ProductoRepository, MovimientoInventarioRepository } = require('../repositories'); 
 const { Cita, sequelize } = require('../models'); 
 const ApiResponse = require('../utils/ApiResponse');
 const RecetaUtils = require('../utils/RecetaUtils'); 
 
-
-
 const ConsultaController = {
 
   crearConsulta: async (req, res) => {
-    // 3. INICIAR TRANSACCIÓN
-    const transaction = await sequelize.transaction();
+    // 3. INICIAR TRANSACCIÓN
+    const transaction = await sequelize.transaction();
     try {
       const { 
-            id_cita, 
-            diagnostico, 
-            observaciones, 
-            tratamiento_sugerido,
-            productos_recetados 
-        } = req.body;
+            id_cita, 
+            diagnostico, 
+            observaciones, 
+            tratamiento_sugerido,
+            productos_recetados 
+        } = req.body;
       const user = req.user;
+      const id_veterinario = user.tipoId; // ID del responsable
 
       if (user.tipo !== 'veterinario') {
         return ApiResponse.forbidden('Solo los veterinarios pueden registrar consultas.', res);
@@ -37,112 +36,132 @@ const ConsultaController = {
       if (!id_cita || !diagnostico || !observaciones || !tratamiento_sugerido) {
         return ApiResponse.validation('Complete todos los campos antes de guardar la consulta', null, res);
       }
-      // **5. Nueva Validación de Productos Recetados**
-      if (productos_recetados && !Array.isArray(productos_recetados)) {
-          await transaction.rollback();
-          return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
-      }
-      
-      const tieneReceta = productos_recetados && productos_recetados.length > 0;
-      
-      // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
-      const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
-      const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
+      // **5. Nueva Validación de Productos Recetados**
+      if (productos_recetados && !Array.isArray(productos_recetados)) {
+          await transaction.rollback();
+          return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
+      }
+      
+      const tieneReceta = productos_recetados && productos_recetados.length > 0;
+      
+      // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
+      const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
+      const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
 
-      // 7. Crear Consulta (pasando el folio y la transacción)
+      // 7. Crear Consulta (pasando el folio y la transacción)
       const nuevaConsulta = await ConsultaRepository.crearConsulta({
         id_cita,
         id_mascota: cita.id_mascota,
-        id_veterinario: user.tipoId,
+        id_veterinario,
         diagnostico,
         observaciones,
         tratamiento_sugerido,
         fecha_consulta: new Date(),
-        folio_receta, // <-- Nuevo
-        estado_receta: folio_receta ? 'PENDIENTE' : null, // <-- Nuevo
-        fecha_expiracion_receta // <-- Nuevo
-      }, { transaction }); // <-- Pasar transacción
+        folio_receta, 
+        estado_receta: folio_receta ? 'PENDIENTE' : null, 
+        fecha_expiracion_receta
+      }, { transaction }); 
 
-      // 8. Crear Items de Receta
-      if (tieneReceta) {
-          const itemsRecetados = productos_recetados.map(p => ({
-              id_consulta: nuevaConsulta.id,
-              id_producto: p.id_producto,
-              dosis: p.dosis,
-              cantidad_autorizada: p.cantidad // Asumo que el campo en el body es 'cantidad'
-          }));
-          
-          await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); // <-- Pasar transacción
-      }
+      // 8. Crear Items de Receta Y DESCONTAR INVENTARIO
+      if (tieneReceta) {
+          const itemsRecetados = productos_recetados.map(p => ({
+              id_consulta: nuevaConsulta.id,
+              id_producto: p.id_producto,
+              dosis: p.dosis,
+              cantidad_autorizada: p.cantidad 
+          }));
+          
+          await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); 
 
-      // 9. Actualizar Cita
+            // 🔥 LÓGICA DE DECREMENTO Y LOG DE INVENTARIO 🔥
+            for (const item of itemsRecetados) {
+                // 8.1. Descontar stock en la tabla 'productos'
+                await ProductoRepository.decrementarStockReceta(
+                    item.id_producto, 
+                    item.cantidad_autorizada, 
+                    { transaction }
+                );
+
+                // 8.2. Crear log de movimiento en 'movimientos_inventario'
+                await MovimientoInventarioRepository.crearMovimiento({
+                    id_producto: item.id_producto,
+                    id_responsable: id_veterinario,
+                    tipo: 'salida', 
+                    cantidad: item.cantidad_autorizada,
+                    motivo: `Reserva por Receta Médica (Folio: ${folio_receta})`
+                }, { transaction });
+            }
+      }
+
+      // 9. Actualizar Cita
       cita.estado = 'Completada';
-      await cita.save({ transaction }); // <-- Pasar transacción
+      await cita.save({ transaction }); 
 
-      // 10. Finalizar Transacción
-      await transaction.commit();
+      // 10. Finalizar Transacción
+      await transaction.commit();
 
-      // Devolvemos el folio de receta en la respuesta, si existe
+      // Devolvemos el folio de receta en la respuesta, si existe
       return ApiResponse.success(
-          'Consulta creada correctamente.', 
-          { ...nuevaConsulta.toJSON(), folio_receta }, 
-          res, 
-          201
-      );
+          'Consulta creada correctamente.', 
+          { ...nuevaConsulta.toJSON(), folio_receta }, 
+          res, 
+          201
+      );
     } catch (error) {
-      // 11. Rollback
-      await transaction.rollback();
+      // 11. Rollback
+      await transaction.rollback();
       console.error('Error al crear consulta:', error);
+      // Podemos manejar un error específico de stock aquí si es necesario
       return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
     }
 },
 
 crearConsultaEmergencia: async (req, res) => {
-    // 3. INICIAR TRANSACCIÓN
-    const transaction = await sequelize.transaction();
+    // 3. INICIAR TRANSACCIÓN
+    const transaction = await sequelize.transaction();
     try {
       const { 
-            id_mascota, 
-            id_cliente, 
-            diagnostico, 
-            observaciones, 
-            tratamiento_sugerido,
-            productos_recetados // **4. Nuevo campo esperado del front**
-        } = req.body;
+            id_mascota, 
+            id_cliente, 
+            diagnostico, 
+            observaciones, 
+            tratamiento_sugerido,
+            productos_recetados 
+        } = req.body;
       const user = req.user;
-      const id_veterinario = user.tipoId;
+      const id_veterinario = user.tipoId;
 
       // ... Validaciones existentes ...
       if (user.tipo !== "veterinario") {
-          await transaction.rollback();
-          return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
+          await transaction.rollback();
+          return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
       }
 
       if (!id_veterinario) {
-          await transaction.rollback();
-          return ApiResponse.unauthorized("No se pudo obtener el veterinario autenticado.", res);
+          await transaction.rollback();
+          return ApiResponse.unauthorized("No se pudo obtener el veterinario autenticado.", res);
       }
 
       if (!id_mascota || !id_cliente || !diagnostico) {
-          await transaction.rollback();
-          return ApiResponse.validation(
-            "Complete los campos requeridos: id_mascota, id_cliente y diagnostico.", null, res
-          );
+          await transaction.rollback();
+          return ApiResponse.validation(
+            "Complete los campos requeridos: id_mascota, id_cliente y diagnostico.", null, res
+          );
       }
-      // **5. Nueva Validación de Productos Recetados**
-      if (productos_recetados && !Array.isArray(productos_recetados)) {
-          await transaction.rollback();
-          return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
-      }
-      // *************************************************************
+      // **5. Nueva Validación de Productos Recetados**
+      if (productos_recetados && !Array.isArray(productos_recetados)) {
+          await transaction.rollback();
+          return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
+      }
+      // *************************************************************
 
-      const tieneReceta = productos_recetados && productos_recetados.length > 0;
-      
-      // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
-      const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
-      const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
+      const tieneReceta = productos_recetados && productos_recetados.length > 0;
+      
+      // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
+      const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
+      const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
 
-      // 7. Crear la consulta de emergencia (pasando el folio y la transacción)
+      // 7. Crear la consulta de emergencia (pasando el folio y la transacción)
       const nuevaConsulta = await ConsultaRepository.crearConsulta({
         id_cita: null,
         id_mascota,
@@ -152,25 +171,44 @@ crearConsultaEmergencia: async (req, res) => {
         observaciones: observaciones || null,
         tratamiento_sugerido: tratamiento_sugerido || null,
         fecha_consulta: new Date(),
-        folio_receta, // <-- Nuevo
-        estado_receta: folio_receta ? 'PENDIENTE' : null, // <-- Nuevo
-        fecha_expiracion_receta // <-- Nuevo
-      }, { transaction }); // <-- Pasar transacción
+        folio_receta, 
+        estado_receta: folio_receta ? 'PENDIENTE' : null, 
+        fecha_expiracion_receta
+      }, { transaction }); 
 
-      // 8. Crear Items de Receta
-      if (tieneReceta) {
-          const itemsRecetados = productos_recetados.map(p => ({
-              id_consulta: nuevaConsulta.id,
-              id_producto: p.id_producto,
-              dosis: p.dosis,
-              cantidad_autorizada: p.cantidad
-          }));
-          
-          await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); // <-- Pasar transacción
-      }
+      // 8. Crear Items de Receta Y DESCONTAR INVENTARIO
+      if (tieneReceta) {
+          const itemsRecetados = productos_recetados.map(p => ({
+              id_consulta: nuevaConsulta.id,
+              id_producto: p.id_producto,
+              dosis: p.dosis,
+              cantidad_autorizada: p.cantidad
+          }));
+          
+          await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); 
 
-      // 9. Finalizar Transacción
-      await transaction.commit();
+            // 🔥 LÓGICA DE DECREMENTO Y LOG DE INVENTARIO 🔥
+            for (const item of itemsRecetados) {
+                // 8.1. Decrementar stock en 'productos'
+                await ProductoRepository.decrementarStockReceta(
+                    item.id_producto, 
+                    item.cantidad_autorizada, 
+                    { transaction }
+                );
+
+                // 8.2. Crear log de movimiento en 'movimientos_inventario'
+                await MovimientoInventarioRepository.crearMovimiento({
+                    id_producto: item.id_producto,
+                    id_responsable: id_veterinario,
+                    tipo: 'salida', 
+                    cantidad: item.cantidad_autorizada,
+                    motivo: `Reserva por Receta Médica (Folio: ${folio_receta})`
+                }, { transaction });
+            }
+      }
+
+      // 9. Finalizar Transacción
+      await transaction.commit();
 
       return ApiResponse.success(
         "Consulta de emergencia y Receta creadas correctamente.",
@@ -180,10 +218,10 @@ crearConsultaEmergencia: async (req, res) => {
       );
 
   } catch (error) {
-      // 10. Rollback
-      await transaction.rollback();
-      console.error("Error al crear consulta de emergencia:", error);
-      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
+      // 10. Rollback
+      await transaction.rollback();
+      console.error("Error al crear consulta de emergencia:", error);
+      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
   }
 },
 
