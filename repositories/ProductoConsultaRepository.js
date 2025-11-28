@@ -29,15 +29,22 @@ class ProductoConsultaRepository {
         });
     }
     
-    async actualizarCantidadDispensada(id_producto_consulta, cantidad_a_dispensar, options = {}) {
-        return await ProductoConsulta.increment(
-            { cantidad_dispensada: cantidad_a_dispensar },
+    async actualizarCantidadDispensada(idConsulta, itemsDispensados, transaction) {
+    
+    const updates = itemsDispensados.map(item => 
+        ProductoConsulta.update(
+            { cantidad_dispensada: item.cantidad_dispensada },
             { 
-                where: { id: id_producto_consulta }, 
-                ...options 
+                where: { 
+                    id_consulta: idConsulta, 
+                    id_producto: item.id_producto 
+                },
+                transaction 
             }
-        );
-    }
+        )
+    );
+    return await Promise.all(updates);
+}
 }
 
 module.exports = new ProductoConsultaRepository();
