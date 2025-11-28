@@ -10,7 +10,7 @@ const RecetaUtils = {
         return `RX-${year}${month}${day}-${randomDigits}`;
     },
 
-    generateExpirationDate: (diasValidez = 30) => {
+    generateExpirationDate: (diasValidez = 3) => {
         const expirationDate = new Date();
         expirationDate.setDate(expirationDate.getDate() + diasValidez);
         return expirationDate;
