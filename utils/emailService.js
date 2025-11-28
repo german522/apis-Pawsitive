@@ -122,6 +122,94 @@ function buildPasswordResetHtml(resetLink) {
   `;
 }
 
+function buildRecetaGeneradaHtmlCliente(d) {
+    return `
+    <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+                 background-color:#e3f2fd; /* Azul claro */
+                 padding:32px;
+                 border-radius:12px;
+                 max-width:550px;
+                 margin:auto;
+                 border:1px solid #bbdefb;
+                 box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+
+        <div style="text-align:center;margin-bottom:24px;">
+            <img src="https://res.cloudinary.com/dzxi5k6ez/image/upload/v1760911319/PAWSITIVE_VIBES_2_nt3js7.png" alt="PawsitiveVibes Logo"
+                 style="width:80px;height:80px;object-fit:contain;border-radius:50%;"/>
+        </div>
+
+        <h2 style="color:#1565C0;text-align:center;margin:0 0 8px;font-size:24px;">
+            📄 ¡Receta Médica Lista!
+        </h2>
+
+        <p style="color:#444;text-align:center;margin:16px 0 24px;font-size:16px;">
+            Hola <b>${d.clienteNombre}</b>. Tu veterinario ha finalizado la consulta de <b>${d.mascotaNombre}</b> y ha emitido una receta.
+            Aquí está el folio para que puedas surtir tus productos:
+        </p>
+        
+        <div style="background:#ffffff;border:1px solid #e1f5fe;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+            <p style="margin:0 0 8px;font-size:14px;color:#666;">
+                Folio de Receta Único:
+            </p>
+            <span style="display:inline-block;
+                         background-color:#E3F2FD;
+                         color:#1565C0; /* Azul oscuro */
+                         font-weight:bold;
+                         font-size:26px;
+                         letter-spacing:3px;
+                         padding:12px 20px;
+                         border-radius:10px;
+                         border:1px solid #90CAF9;">
+                ${d.folio_receta}
+            </span>
+            <p style="margin:16px 0 0;font-size:14px;color:#666;">
+                Esta receta es válida hasta el <b>${d.fecha_expiracion}</b>.
+            </p>
+        </div>
+        
+        <p style="color:#444;font-size:15px;text-align:center;margin:0;">
+            Utiliza este folio en nuestra tienda en línea o preséntalo en nuestro punto de venta.
+        </p>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+        <p style="text-align:center;color:#888;font-size:12px;">
+            <strong style="color:#64B5F6;">PawsitiveVibes 🐾</strong><br>
+            <span style="color:#A5A5A5;">${FROM}</span>
+        </p>
+    </div>
+    `;
+}
+
+async function enviarCorreoRecetaGenerada({ data }) {
+    if (provider !== 'resend') {
+        console.warn(`EMAIL_PROVIDER no es 'resend', omitiendo envío de correo de receta.`);
+        return;
+    }
+    if (!data.toCliente || !data.folio_receta) {
+        console.error('enviarCorreoRecetaGenerada: Faltan datos críticos (toCliente o folio_receta).');
+        return;
+    }
+
+    const subjectCliente = `Tu Receta Médica de PawsitiveVibes • ${data.mascotaNombre}`;
+    const textBase = 
+        `Mascota: ${data.mascotaNombre}\n` +
+        `Folio de Receta: ${data.folio_receta}\n` +
+        `Válido hasta: ${data.fecha_expiracion}`;
+
+    try {
+        await resend.emails.send({
+            from: `PawsitiveVibes <${FROM}>`,
+            to: data.toCliente,
+            subject: subjectCliente,
+            html: buildRecetaGeneradaHtmlCliente(data),
+            text: `Se ha generado una nueva receta para tu mascota.\n\n${textBase}`
+        });
+        console.log('Correo de receta generado y enviado a:', data.toCliente);
+    } catch (err) {
+        console.error('Error enviando correo de receta generada:', err?.response?.data || err?.message || err);
+    }
+}
 
 /**
  * Envia un correo con código de verificación.
@@ -355,5 +443,6 @@ module.exports = {
   enviarCorreoVerificacion,
   enviarCorreoCitaAgendada,
   enviarCorreoCitaCancelada,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  enviarCorreoRecetaGenerada
 };

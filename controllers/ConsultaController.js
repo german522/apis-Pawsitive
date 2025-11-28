@@ -1,7 +1,18 @@
-const { ConsultaRepository, ProductoConsultaRepository, ProductoRepository, MovimientoInventarioRepository } = require('../repositories'); 
+const { ClienteRepository, MascotaRepository, ConsultaRepository, ProductoConsultaRepository, ProductoRepository, MovimientoInventarioRepository } = require('../repositories'); 
 const { Cita, sequelize } = require('../models'); 
 const ApiResponse = require('../utils/ApiResponse');
 const RecetaUtils = require('../utils/RecetaUtils'); 
+const emailService = require("../utils/emailService");
+
+const formatDateForEmail = (date) => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    return d.toLocaleDateString('es-MX', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+};
 
 const ConsultaController = {
 
@@ -100,20 +111,45 @@ const ConsultaController = {
       // 10. Finalizar Transacción
       await transaction.commit();
 
-      // Devolvemos el folio de receta en la respuesta, si existe
-      return ApiResponse.success(
-          'Consulta creada correctamente.', 
-          { ...nuevaConsulta.toJSON(), folio_receta }, 
-          res, 
-          201
-      );
-    } catch (error) {
-      // 11. Rollback
-      await transaction.rollback();
-      console.error('Error al crear consulta:', error);
-      // Podemos manejar un error específico de stock aquí si es necesario
-      return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
-    }
+      if (tieneReceta) {
+            
+            // 1. Obtener el ID del cliente de la cita
+            const id_cliente = cita.id_cliente; 
+            
+            // 2. Obtener datos de Cliente (incluye Persona) y Mascota
+            const cliente = await ClienteRepository.getById(id_cliente); 
+            const mascota = await MascotaRepository.getById(cita.id_mascota); 
+            
+            // 3. Verificar datos y enviar correo
+            // Usamos cliente.persona.email y cliente.persona.nombre, y mascota.nombre
+            if (cliente && mascota && cliente.persona && cliente.persona.correo) {
+                const data = {
+                    toCliente: cliente.persona.correo, 
+                    clienteNombre: cliente.persona.nombre, 
+                    mascotaNombre: mascota.nombre, 
+                    folio_receta,
+                    fecha_expiracion: formatDateForEmail(fecha_expiracion_receta) 
+                };
+                // Envío asíncrono. No esperamos la respuesta para no bloquear el API.
+                emailService.enviarCorreoRecetaGenerada({ data }); 
+            } else {
+                console.warn(`[NOTIF] No se pudo enviar correo de receta: Falta email del cliente o datos de cliente/mascota. Cliente ID: ${id_cliente}`);
+            }
+        }
+        
+      // Devolvemos el folio de receta en la respuesta, si existe
+      return ApiResponse.success(
+          'Consulta creada correctamente.', 
+          { ...nuevaConsulta.toJSON(), folio_receta }, 
+          res, 
+          201
+      );
+    } catch (error) {
+      // 11. Rollback
+      await transaction.rollback();
+      console.error('Error al crear consulta:', error);
+      return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
+    }
 },
 
 crearConsultaEmergencia: async (req, res) => {
@@ -210,19 +246,42 @@ crearConsultaEmergencia: async (req, res) => {
       // 9. Finalizar Transacción
       await transaction.commit();
 
-      return ApiResponse.success(
-        "Consulta de emergencia y Receta creadas correctamente.",
-        { ...nuevaConsulta.toJSON(), folio_receta },
-        res,
-        201
-      );
+      if (tieneReceta) {
+            
+            // 1. Obtener datos de Cliente (incluye Persona) y Mascota
+            const cliente = await ClienteRepository.getById(id_cliente); 
+            const mascota = await MascotaRepository.getById(id_mascota); 
+            
+            // 2. Verificar datos y enviar correo
+            // Usamos cliente.persona.email y cliente.persona.nombre, y mascota.nombre
+            if (cliente && mascota && cliente.persona && cliente.persona.correo) {
+                const data = {
+                    toCliente: cliente.persona.correo, 
+                    clienteNombre: cliente.persona.nombre, 
+                    mascotaNombre: mascota.nombre, 
+                    folio_receta,
+                    fecha_expiracion: formatDateForEmail(fecha_expiracion_receta) 
+                };
+                // Envío asíncrono
+                emailService.enviarCorreoRecetaGenerada({ data }); 
+            } else {
+                console.warn(`[NOTIF] No se pudo enviar correo de receta: Falta email del cliente o datos de cliente/mascota. Cliente ID: ${id_cliente}`);
+            }
+        }
 
-  } catch (error) {
-      // 10. Rollback
-      await transaction.rollback();
-      console.error("Error al crear consulta de emergencia:", error);
-      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
-  }
+      return ApiResponse.success(
+        "Consulta de emergencia y Receta creadas correctamente.",
+        { ...nuevaConsulta.toJSON(), folio_receta },
+        res,
+        201
+      );
+
+    } catch (error) {
+      // 10. Rollback
+      await transaction.rollback();
+      console.error("Error al crear consulta de emergencia:", error);
+      return ApiResponse.error("Error interno del servidor.", res, 500, error.message);
+    }
 },
 
   // Listar todas las consultas (filtradas por tipo de usuario)
