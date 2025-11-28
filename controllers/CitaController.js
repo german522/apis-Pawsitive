@@ -44,83 +44,96 @@ async function cargarCitaConDatosCorreo(idCita, overrides = {}) {
 
 const CitaController = {
   listarCitas: async (req, res) => {
-  try {
-    const { user } = req;
-    let filtro = {};
-    if (user.tipo === 'cliente') {
-      filtro.id_cliente = user.id; 
-    } else if (user.tipo === 'veterinario') {
-      if (user.veterinario && user.veterinario.id){
-        filtro.id_veterinario = user.veterinario.id; 
-      }
-    } else {
-      return res.status(403).json({ error: 'No tienes permisos para ver citas.' });
-    }
+    try {
+      const { user } = req;
+      let filtro = {};
 
-    const citas = await Cita.findAll({
-      where: filtro,
-      include: [
-        {
-          model: Mascota,
-          attributes: [
-            'nombre', 'especie', 'raza', 'sexo', 'color', 
-            'fecha_nacimiento', 'peso', 'URL_imagen'
-          ]
-        },
-        {
-          model: Persona,
-          as: 'cliente',
-          attributes: ['nombre', 'correo']
-        },
-        { 
-          model: Veterinario,
-          include: { 
-            model: Persona, 
-            as: 'persona', 
-            attributes: ['nombre'] 
-          }
+      if (user.tipo === 'cliente') {
+        filtro.id_cliente = user.id; 
+      } else if (user.tipo === 'veterinario') {
+        if (user.veterinario && user.veterinario.id){
+          filtro.id_veterinario = user.veterinario.id; 
         }
-      ],
-      order: [['fecha', 'ASC'], ['hora', 'ASC']]
-    });
+      } else {
+        return res.status(403).json({ error: 'No tienes permisos para ver citas.' });
+      }
 
-    const citasFormateadas = citas.map(cita => {
-      const fechaHora = new Date(`${cita.fecha}T${cita.hora}`);
-      const opcionesFecha = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-      const opcionesHora = { hour: '2-digit', minute: '2-digit' };
+      const citas = await Cita.findAll({
+        where: filtro,
+        include: [
+          {
+            model: Mascota,
+            // NO ponemos 'as', dejamos que Sequelize use su nombre por defecto (Mascotum)
+            attributes: [
+              'id', 
+              'nombre', 'especie', 'raza', 'sexo', 'color', 
+              'fecha_nacimiento', 'peso', 'URL_imagen'
+            ]
+          },
+          {
+            model: Persona,
+            as: 'cliente',
+            attributes: ['nombre', 'correo']
+          },
+          { 
+            model: Veterinario,
+            include: { 
+              model: Persona, 
+              as: 'persona', 
+              attributes: ['nombre'] 
+            }
+          }
+        ],
+        order: [['fecha', 'ASC'], ['hora', 'ASC']]
+      });
 
-      return {
-        id: cita.id,
-        fecha: fechaHora.toLocaleDateString('es-MX', opcionesFecha),
-        hora: fechaHora.toLocaleTimeString('es-MX', opcionesHora),
-        estado: cita.estado || 'Pendiente',
-        motivo: cita.motivo,
-        mascota: cita.Mascota ? {
-          nombre: cita.Mascota.nombre,
-          especie: cita.Mascota.especie,
-          raza: cita.Mascota.raza,
-          sexo: cita.Mascota.sexo,
-          color: cita.Mascota.color,
-          fecha_nacimiento: cita.Mascota.fecha_nacimiento,
-          peso: cita.Mascota.peso,
-          URL_imagen: cita.Mascota.URL_imagen
-        } : null,
-        cliente: cita.cliente ? {
-          nombre: cita.cliente.nombre,
-          correo: cita.cliente.correo
-        } : null,
-        veterinario: cita.Veterinario && cita.Veterinario.persona ? {
-          nombre: cita.Veterinario.persona.nombre
-        } : null,
-        proximaCita: fechaHora > new Date()
-      };
-    });
+      const citasFormateadas = citas.map(citaInstance => {
+        // Convertimos a JSON plano para ver las propiedades reales
+        const cita = citaInstance.toJSON();
+        
+        // CORRECCIÓN CLAVE: Sequelize renombró la propiedad a 'Mascotum'
+        const datosMascota = cita.Mascotum || cita.Mascota || cita.mascota;
 
-    res.json(citasFormateadas);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-},
+        const fechaHora = new Date(`${cita.fecha}T${cita.hora}`);
+        const opcionesFecha = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+        const opcionesHora = { hour: '2-digit', minute: '2-digit' };
+
+        return {
+          id: cita.id,
+          fecha: fechaHora.toLocaleDateString('es-MX', opcionesFecha),
+          hora: fechaHora.toLocaleTimeString('es-MX', opcionesHora),
+          estado: cita.estado || 'Pendiente',
+          motivo: cita.motivo,
+          
+          mascota: datosMascota ? {
+            id: datosMascota.id,
+            nombre: datosMascota.nombre,
+            especie: datosMascota.especie,
+            raza: datosMascota.raza,
+            sexo: datosMascota.sexo,
+            color: datosMascota.color,
+            fecha_nacimiento: datosMascota.fecha_nacimiento,
+            peso: datosMascota.peso,
+            URL_imagen: datosMascota.URL_imagen
+          } : null,
+          
+          cliente: cita.cliente ? {
+            nombre: cita.cliente.nombre,
+            correo: cita.cliente.correo
+          } : null,
+          veterinario: cita.Veterinario && cita.Veterinario.persona ? {
+            nombre: cita.Veterinario.persona.nombre
+          } : null,
+          proximaCita: fechaHora > new Date()
+        };
+      });
+
+      res.json(citasFormateadas);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   agendarCita: async (req, res) => {
     try {
