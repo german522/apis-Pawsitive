@@ -16,18 +16,6 @@ const formatDateForEmail = (date) => {
 
 const ConsultaController = {
 
-  // Asegúrate de que esta función esté definida al inicio de tu controlador o en un utilitario
-/* const formatDateForEmail = (date) => {
-    if (!date) return 'N/A';
-    const d = new Date(date);
-    return d.toLocaleDateString('es-MX', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-};
-*/
-
 crearConsulta: async (req, res) => {
     // 3. INICIAR TRANSACCIÓN
     const transaction = await sequelize.transaction();
@@ -421,7 +409,142 @@ obtenerConsultasPorMascota: async (req, res) => {
       error.message
     );
   }
-}
+},
+
+obtenerRecetaPorFolio: async (req, res) => {
+    try {
+        const { folio_receta } = req.params;
+        const user = req.user;
+
+        // 1. Validación de Roles
+        if (user.tipo !== 'veterinario' && user.tipo !== 'administrador' /* && user.tipo !== 'farmacia' */) {
+            return ApiResponse.forbidden('Acceso denegado. Solo personal autorizado para dispensar recetas.', res);
+        }
+
+        // 2. Buscar la consulta
+        const consulta = await ConsultaRepository.obtenerPorFolioConProductos(folio_receta);
+
+        if (!consulta) {
+            return ApiResponse.notFound('Receta no encontrada para el folio proporcionado.', res);
+        }
+        
+        // 3. Obtener el cliente (dueño) asociado
+        const idCliente = consulta.id_cliente; 
+        let clienteData = null;
+        if (idCliente) {
+            clienteData = await ClienteRepository.getById(idCliente); 
+        }
+
+        // 🚨 FIX 1: Proporcionar un arreglo vacío si no hay productos recetados
+        const productosRecetados = consulta.productos_recetados || []; 
+        
+        // 4. Formatear la respuesta (datos requeridos para el surtido)
+        const recetaData = {
+            id_consulta: consulta.id,
+            folio: consulta.folio_receta,
+            estado: consulta.estado_receta,
+            fecha_expiracion: consulta.fecha_expiracion_receta,
+            diagnostico: consulta.diagnostico,
+            observaciones: consulta.observaciones,
+            tratamiento_sugerido: consulta.tratamiento_sugerido,
+            mascota_nombre: consulta.mascota.nombre,
+            // Usamos la variable 'productosRecetados' ya validada
+            productos_a_surtir: productosRecetados.map(item => ({
+                id_producto: item.id_producto,
+                nombre: item.producto.nombre,
+                unidad: item.producto.unidad_medida,
+                dosis: item.dosis,
+                autorizada: item.cantidad_autorizada,
+                dispensada_previa: item.cantidad_dispensada || 0,
+                // Cantidad Máxima que aún puede llevar
+                cantidad_restante: item.cantidad_autorizada - (item.cantidad_dispensada || 0) 
+            }))
+        };
+
+        return ApiResponse.success('Detalles de la receta obtenidos correctamente.', recetaData, res);
+
+    } catch (error) {
+        console.error('Error al obtener receta por folio:', error);
+        return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
+    }
+},
+
+/**
+ * POST: Procesa la dispensación de medicamentos.
+ */
+dispensarReceta: async (req, res) => {
+    const transaction = await sequelize.transaction();
+    try {
+        // 🚨 Solo requerimos el folio_receta en el body
+        const { folio_receta } = req.body; 
+        const user = req.user;
+
+        // 1. Validación de Roles
+        if (user.tipo !== 'veterinario' && user.tipo !== 'administrador' /* ... */) {
+            await transaction.rollback();
+            return ApiResponse.forbidden('Solo personal autorizado puede dispensar recetas.', res);
+        }
+
+        if (!folio_receta) {
+            await transaction.rollback();
+            return ApiResponse.validation('Debe proporcionar el folio de la receta.', null, res);
+        }
+
+        // 2. Buscar la consulta y validar estado
+        const consulta = await ConsultaRepository.obtenerPorFolioConProductos(folio_receta);
+
+        if (!consulta) {
+            await transaction.rollback();
+            return ApiResponse.notFound('Receta no encontrada para el folio proporcionado.', res);
+        }
+
+        if (consulta.estado_receta === 'DISPENSADA') {
+            await transaction.rollback();
+            return ApiResponse.conflict('Esta receta ya ha sido dispensada.', res);
+        }
+        
+        const productosRecetados = consulta.productos_recetados || []; 
+        
+        if (productosRecetados.length === 0) {
+             await transaction.rollback();
+             return ApiResponse.validation('La receta no tiene productos asociados para dispensar.', null, res);
+        }
+
+        // 🚨 NUEVA LÓGICA SIMPLIFICADA 🚨
+        
+        // 3. Preparar la actualización: Marcar cantidad_dispensada = cantidad_autorizada para todos
+        const itemsAActualizar = productosRecetados.map(item => ({
+            id_producto: item.id_producto,
+            // Marcamos la cantidad dispensada como la cantidad total autorizada
+            cantidad_dispensada: item.cantidad_autorizada 
+        }));
+        
+        // 4. El estado final siempre es DISPENSADA
+        const nuevoEstado = 'DISPENSADA'; 
+
+        // 5. Ejecutar actualizaciones transaccionales
+        await ConsultaRepository.marcarEstadoReceta(consulta.id, nuevoEstado, transaction);
+        await ProductoConsultaRepository.actualizarCantidadDispensada(consulta.id, itemsAActualizar, transaction);
+
+        // 6. Finalizar Transacción
+        await transaction.commit();
+
+        return ApiResponse.success(
+            `Receta con folio ${folio_receta} dispensada correctamente.`,
+            { id_consulta: consulta.id, folio_receta, estado_receta: nuevoEstado },
+            res
+        );
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error al dispensar receta:', error);
+        return ApiResponse.error('Error interno del servidor al dispensar la receta.', res, 500, error.message);
+    }
+},
+
 };
+
+
+
 
 module.exports = ConsultaController;
