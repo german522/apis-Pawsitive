@@ -123,59 +123,108 @@ function buildPasswordResetHtml(resetLink) {
 }
 
 function buildRecetaGeneradaHtmlCliente(d) {
+    // 1. Generamos el HTML de la lista de productos dinámicamente
+    let productosHtml = '';
+    
+    if (d.listaProductos && d.listaProductos.length > 0) {
+        // Mapeamos cada producto a un elemento de lista <li>
+        const items = d.listaProductos.map(p => `
+            <li style="margin-bottom:10px; color:#444;">
+                <strong style="color:#1565C0;">${p.nombre}</strong>
+                <div style="font-size:13px; color:#666;">
+                    Dosis: ${p.dosis} <span style="color:#aaa;">|</span> Cantidad: ${p.cantidad}
+                </div>
+            </li>
+        `).join('');
+        
+        productosHtml = `<ul style="padding-left:20px; margin:0;">${items}</ul>`;
+    } else {
+        productosHtml = '<p style="color:#888; font-style:italic; font-size:14px;">No se registraron medicamentos para compra.</p>';
+    }
+
+    // 2. Retornamos la plantilla completa
     return `
     <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-                 background-color:#e3f2fd; /* Azul claro */
-                 padding:32px;
-                 border-radius:12px;
-                 max-width:550px;
-                 margin:auto;
-                 border:1px solid #bbdefb;
-                 box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+                background-color:#e3f2fd; 
+                padding:32px;
+                border-radius:12px;
+                max-width:550px;
+                margin:auto;
+                border:1px solid #bbdefb;
+                box-shadow:0 4px 12px rgba(0,0,0,0.08);">
 
         <div style="text-align:center;margin-bottom:24px;">
-            <img src="https://res.cloudinary.com/dzxi5k6ez/image/upload/v1760911319/PAWSITIVE_VIBES_2_nt3js7.png" alt="PawsitiveVibes Logo"
+            <img src="https://res.cloudinary.com/dzxi5k6ez/image/upload/v1760911319/PAWSITIVE_VIBES_2_nt3js7.png" 
+                 alt="PawsitiveVibes Logo"
                  style="width:80px;height:80px;object-fit:contain;border-radius:50%;"/>
         </div>
 
         <h2 style="color:#1565C0;text-align:center;margin:0 0 8px;font-size:24px;">
-            📄 ¡Receta Médica Lista!
+            📄 Resumen de Consulta
         </h2>
 
         <p style="color:#444;text-align:center;margin:16px 0 24px;font-size:16px;">
-            Hola <b>${d.clienteNombre}</b>. Tu veterinario ha finalizado la consulta de <b>${d.mascotaNombre}</b> y ha emitido una receta.
-            Aquí está el folio para que puedas surtir tus productos:
+            Hola <b>${d.clienteNombre}</b>. Aquí tienes el resumen de la atención brindada a <b>${d.mascotaNombre}</b>.
         </p>
         
-        <div style="background:#ffffff;border:1px solid #e1f5fe;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-            <p style="margin:0 0 8px;font-size:14px;color:#666;">
-                Folio de Receta Único:
+        <div style="background:#ffffff; border:1px solid #b3e5fc; border-radius:12px; padding:20px; text-align:center; margin-bottom:24px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            <p style="margin:0 0 8px;font-size:14px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:bold;">
+                Folio para Farmacia
             </p>
-            <span style="display:inline-block;
-                         background-color:#E3F2FD;
-                         color:#1565C0; /* Azul oscuro */
+            <span style="display:block;
+                         background-color:#E1F5FE;
+                         color:#0277BD;
                          font-weight:bold;
-                         font-size:26px;
-                         letter-spacing:3px;
-                         padding:12px 20px;
-                         border-radius:10px;
-                         border:1px solid #90CAF9;">
+                         font-size:28px;
+                         letter-spacing:4px;
+                         padding:12px;
+                         border-radius:8px;
+                         margin-bottom:8px;">
                 ${d.folio_receta}
             </span>
-            <p style="margin:16px 0 0;font-size:14px;color:#666;">
-                Esta receta es válida hasta el <b>${d.fecha_expiracion}</b>.
+            <p style="margin:0;font-size:12px;color:#888;">
+                Vence el: ${d.fecha_expiracion}
             </p>
         </div>
-        
-        <p style="color:#444;font-size:15px;text-align:center;margin:0;">
-            Utiliza este folio en nuestra tienda en línea o preséntalo en nuestro punto de venta.
+
+        <div style="background:#ffffff; border-radius:12px; padding:24px; margin-bottom:24px;">
+            <h3 style="color:#1565C0; margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px; font-size:18px;">
+                📋 Detalles Médicos
+            </h3>
+            
+            <div style="margin-bottom:16px;">
+                <strong style="color:#333; font-size:14px;">Diagnóstico:</strong>
+                <p style="margin:4px 0 0; color:#555; font-size:15px; line-height:1.4;">${d.diagnostico}</p>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#333; font-size:14px;">Tratamiento / Indicaciones:</strong>
+                <p style="margin:4px 0 0; color:#555; font-size:15px; line-height:1.4; white-space:pre-wrap;">${d.tratamiento}</p>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#333; font-size:14px;">Observaciones:</strong>
+                <p style="margin:4px 0 0; color:#555; font-size:14px; line-height:1.4;">${d.observaciones}</p>
+            </div>
+
+            <div style="margin-top:20px; padding-top:15px; border-top:1px dashed #ddd;">
+                <strong style="color:#333; font-size:14px;">💊 Medicamentos Recetados:</strong>
+                <div style="margin-top:10px; font-size:14px;">
+                    ${productosHtml}
+                </div>
+            </div>
+        </div>
+
+        <p style="color:#666;font-size:14px;text-align:center;margin:0;">
+            Puedes presentar el folio en recepción o usarlo en nuestra tienda en línea.
         </p>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+        <hr style="border:none;border-top:1px solid #cfd8dc;margin:24px 0;">
 
-        <p style="text-align:center;color:#888;font-size:12px;">
+        <p style="text-align:center;color:#90a4ae;font-size:12px;">
             <strong style="color:#64B5F6;">PawsitiveVibes 🐾</strong><br>
-            <span style="color:#A5A5A5;">${FROM}</span>
+            Cuidando a quienes más amas.<br>
+            <span style="color:#b0bec5;">${FROM}</span>
         </p>
     </div>
     `;
@@ -183,19 +232,31 @@ function buildRecetaGeneradaHtmlCliente(d) {
 
 async function enviarCorreoRecetaGenerada({ data }) {
     if (provider !== 'resend') {
-        console.warn(`EMAIL_PROVIDER no es 'resend', omitiendo envío de correo de receta.`);
+        console.warn(`EMAIL_PROVIDER no es 'resend', omitiendo envío.`);
         return;
     }
     if (!data.toCliente || !data.folio_receta) {
-        console.error('enviarCorreoRecetaGenerada: Faltan datos críticos (toCliente o folio_receta).');
+        console.error('enviarCorreoRecetaGenerada: Faltan datos críticos.');
         return;
     }
 
-    const subjectCliente = `Tu Receta Médica de PawsitiveVibes • ${data.mascotaNombre}`;
+    const subjectCliente = `Resumen de Consulta y Receta • ${data.mascotaNombre}`;
+    
+    // Generamos también una versión en texto plano por si el HTML falla
+    let productosTexto = '';
+    if (data.listaProductos && data.listaProductos.length > 0) {
+        productosTexto = data.listaProductos.map(p => `- ${p.nombre}: ${p.dosis}`).join('\n');
+    } else {
+        productosTexto = 'Sin medicamentos registrados.';
+    }
+
     const textBase = 
-        `Mascota: ${data.mascotaNombre}\n` +
-        `Folio de Receta: ${data.folio_receta}\n` +
-        `Válido hasta: ${data.fecha_expiracion}`;
+        `Hola, aquí el resumen para ${data.mascotaNombre}.\n\n` +
+        `FOLIO RECETA: ${data.folio_receta}\n` +
+        `Vence: ${data.fecha_expiracion}\n\n` +
+        `DIAGNÓSTICO: ${data.diagnostico}\n` +
+        `TRATAMIENTO: ${data.tratamiento}\n\n` +
+        `MEDICAMENTOS:\n${productosTexto}`;
 
     try {
         await resend.emails.send({
@@ -203,14 +264,13 @@ async function enviarCorreoRecetaGenerada({ data }) {
             to: data.toCliente,
             subject: subjectCliente,
             html: buildRecetaGeneradaHtmlCliente(data),
-            text: `Se ha generado una nueva receta para tu mascota.\n\n${textBase}`
+            text: textBase
         });
-        console.log('Correo de receta generado y enviado a:', data.toCliente);
+        console.log('Correo de consulta completa enviado a:', data.toCliente);
     } catch (err) {
-        console.error('Error enviando correo de receta generada:', err?.response?.data || err?.message || err);
+        console.error('Error enviando correo:', err?.response?.data || err?.message || err);
     }
 }
-
 /**
  * Envia un correo con código de verificación.
  * @param {Object} params

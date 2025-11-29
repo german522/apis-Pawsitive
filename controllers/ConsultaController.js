@@ -1,23 +1,15 @@
 const { ClienteRepository, MascotaRepository, ConsultaRepository, ProductoConsultaRepository, ProductoRepository, MovimientoInventarioRepository } = require('../repositories'); 
-const { Cita, sequelize } = require('../models'); 
+const { Cita, Cliente, Persona, Mascota, Producto, sequelize } = require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const RecetaUtils = require('../utils/RecetaUtils'); 
 const emailService = require("../utils/emailService");
 
-const formatDateForEmail = (date) => {
-    if (!date) return 'N/A';
-    const d = new Date(date);
-    return d.toLocaleDateString('es-MX', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-};
+
 
 const ConsultaController = {
 
 crearConsulta: async (req, res) => {
-    // 3. INICIAR TRANSACCIÓN
+    // 1. INICIAR TRANSACCIÓN
     const transaction = await sequelize.transaction();
     try {
         const { 
@@ -27,27 +19,43 @@ crearConsulta: async (req, res) => {
             tratamiento_sugerido,
             productos_recetados 
         } = req.body;
+        
         const user = req.user;
-        const id_veterinario = user.tipoId; // ID del responsable
+        const id_veterinario = user.tipoId; 
 
+        // 2. Validaciones Iniciales
         if (user.tipo !== 'veterinario') {
+            await transaction.rollback(); 
             return ApiResponse.forbidden('Solo los veterinarios pueden registrar consultas.', res);
         }
 
-        const cita = await Cita.findByPk(id_cita);
-        if (!cita) return ApiResponse.notFound('Cita no encontrada.', res);
+        // 🚨 CAMBIO CLAVE 1: Forzar la carga de id_cliente de la cita
+        const cita = await Cita.findByPk(id_cita, {
+            attributes: ['id', 'id_mascota', 'estado', 'id_cliente'] // Añadimos id_cliente
+        });
+
+        if (!cita) {
+            await transaction.rollback();
+            return ApiResponse.notFound('Cita no encontrada.', res);
+        }
 
         if (cita.estado !== 'Agendada') {
+            await transaction.rollback();
             return ApiResponse.validation('Solo se pueden registrar consultas para citas agendadas.', null, res);
         }
 
         const existente = await ConsultaRepository.obtenerPorCita(id_cita);
-        if (existente) return ApiResponse.conflict('Esta cita ya tiene una consulta registrada.', res);
+        if (existente) {
+            await transaction.rollback();
+            return ApiResponse.conflict('Esta cita ya tiene una consulta registrada.', res);
+        }
 
+        // Se mantiene la validación de campos obligatorios
         if (!id_cita || !diagnostico || !observaciones || !tratamiento_sugerido) {
+            await transaction.rollback();
             return ApiResponse.validation('Complete todos los campos antes de guardar la consulta', null, res);
         }
-        // **5. Nueva Validación de Productos Recetados**
+
         if (productos_recetados && !Array.isArray(productos_recetados)) {
             await transaction.rollback();
             return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
@@ -55,11 +63,11 @@ crearConsulta: async (req, res) => {
         
         const tieneReceta = productos_recetados && productos_recetados.length > 0;
         
-        // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
+        // 3. Generar Folio y Fecha
         const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
         const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
 
-        // 7. Crear Consulta (pasando el folio y la transacción)
+        // 4. Crear registro en tabla 'consultas'
         const nuevaConsulta = await ConsultaRepository.crearConsulta({
             id_cita,
             id_mascota: cita.id_mascota,
@@ -73,7 +81,10 @@ crearConsulta: async (req, res) => {
             fecha_expiracion_receta
         }, { transaction }); 
 
-        // 8. Crear Items de Receta Y DESCONTAR INVENTARIO
+        // Variable para recolectar nombres de productos para el correo
+        let listaProductosParaCorreo = [];
+
+        // 5. Procesar Productos (Si hay receta)
         if (tieneReceta) {
             const itemsRecetados = productos_recetados.map(p => ({
                 id_consulta: nuevaConsulta.id,
@@ -82,112 +93,128 @@ crearConsulta: async (req, res) => {
                 cantidad_autorizada: p.cantidad 
             }));
 
-            // ------------------------------------------------------------------
-            // 🔥 8.1. VALIDACIÓN CRÍTICA DE STOCK (PRE-MOVIMIENTO) 🔥
+            // --- VALIDACIÓN DE STOCK Y RECOLECCIÓN DE DATOS ---
             for (const item of itemsRecetados) {
-                // Asumimos que getById devuelve el objeto Producto con el campo 'stock'
-                const producto = await ProductoRepository.getById(item.id_producto); 
+                const producto = await ProductoRepository.obtenerPorId(item.id_producto); 
                 
                 if (!producto) {
                     await transaction.rollback();
                     return ApiResponse.error(`El producto con ID ${item.id_producto} no fue encontrado.`, res, 404);
                 }
                 
-                // Validar stock: producto.stock vs cantidad_autorizada
                 if (producto.stock_actual < item.cantidad_autorizada) {
                     await transaction.rollback();
                     return ApiResponse.error(
-                        `Stock insuficiente para el producto '${producto.nombre}'. Necesitas ${item.cantidad_autorizada} unidades, pero solo hay ${producto.stock} en inventario.`,
-                        res, 
-                        400
+                        `Stock insuficiente para '${producto.nombre}'. Requieres ${item.cantidad_autorizada} pero hay ${producto.stock_actual}.`,
+                        res, 400
                     );
                 }
+
+                // Guardamos info visual para el correo
+                listaProductosParaCorreo.push({
+                    nombre: producto.nombre,
+                    dosis: item.dosis,
+                    cantidad: item.cantidad_autorizada
+                });
             }
-            // ------------------------------------------------------------------
             
-            // 8.2. CREACIÓN Y DESCUENTO (Solo si la validación pasó)
+            // --- CREACIÓN DE ITEMS Y DESCUENTO ---
             await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); 
 
-            // 🔥 LÓGICA DE DECREMENTO Y LOG DE INVENTARIO 🔥
             for (const item of itemsRecetados) {
-                // Descontar stock en la tabla 'productos'
                 await ProductoRepository.decrementarStockReceta(
                     item.id_producto, 
                     item.cantidad_autorizada, 
                     { transaction }
                 );
 
-                // Crear log de movimiento en 'movimientos_inventario'
                 await MovimientoInventarioRepository.crearMovimiento({
                     id_producto: item.id_producto,
                     id_responsable: id_veterinario,
                     tipo: 'salida', 
                     cantidad: item.cantidad_autorizada,
-                    motivo: `Reserva por Receta Médica (Folio: ${folio_receta})`
+                    motivo: `Reserva por Receta (Folio: ${folio_receta})`
                 }, { transaction });
             }
         }
 
-        // 9. Actualizar Cita
+        // 6. Actualizar Estado de la Cita
         cita.estado = 'Completada';
         await cita.save({ transaction }); 
 
-        // 10. Finalizar Transacción
+        // 7. CONFIRMAR TRANSACCIÓN
         await transaction.commit();
 
         // ------------------------------------------------------------------
-        // 🔥 10.5. ENVÍO DE CORREO (CORRECCIÓN DEL ERROR DE ROLLBACK) 🔥
+        // 🔥 ENVÍO DE CORREO MEJORADO (Post-Commit) 🔥
         if (tieneReceta) {
-            
-            const id_cliente = cita.id_cliente; 
-            const cliente = await ClienteRepository.getById(id_cliente); 
-            // Usamos Mascota.findByPk por rendimiento, asumiendo Mascota está disponible.
-            const mascota = await Mascota.findByPk(cita.id_mascota, { attributes: ['nombre'] }); 
-            
-            // Nota: Se ha asumido que el campo correcto de correo es 'email' o 'correo' (como lo tenías). 
-            // Usaré 'email' por ser la convención más común, pero revísalo.
-            const correoDestino = (cliente && cliente.persona) ? (cliente.persona.email || cliente.persona.correo) : null;
+            try {
 
-            if (cliente && mascota && correoDestino) {
-                const data = {
-                    toCliente: correoDestino, 
-                    clienteNombre: cliente.persona.nombre, 
-                    mascotaNombre: mascota.nombre, 
-                    folio_receta,
-                    fecha_expiracion: formatDateForEmail(fecha_expiracion_receta) 
-                };
+                // 🚨 CAMBIO CLAVE 2: Usar el id_cliente cargado de la cita para buscar al Cliente/Persona
+                const idCliente = cita.id_cliente; 
+
+                // Forzar la carga de la Persona sin usar el Repositorio de Clientes
+                const cliente = await Cliente.findByPk(idCliente, {
+                    include: [{ 
+                        model: Persona, 
+                        as: 'persona', 
+                        attributes: ['nombre', 'correo'] 
+                    }]
+                });
                 
-                // 👇🏼 CORRECCIÓN CLAVE: Usar AWAIT dentro de un TRY/CATCH local.
-                try {
+                // Obtener la mascota (solo para el nombre en el cuerpo del correo)
+                const mascota = await Mascota.findByPk(cita.id_mascota, { attributes: ['nombre'] }); 
+                
+                const persona = cliente ? cliente.persona : null;
+                
+                // 🚨 CAMBIO CLAVE 3: Validación robusta contra cadenas vacías ("")
+                const correoDestino = persona ? String(persona.correo || '').trim() : null; 
+                
+                if (cliente && mascota && correoDestino) {
+                    const data = {
+                        toCliente: correoDestino, 
+                        clienteNombre: persona.nombre, 
+                        mascotaNombre: mascota.nombre, 
+                        folio_receta,
+                        fecha_expiracion: RecetaUtils.formatDateForEmail ? RecetaUtils.formatDateForEmail(fecha_expiracion_receta) : fecha_expiracion_receta,
+                        
+                        // DATOS COMPLETOS PARA EL RESUMEN CLÍNICO
+                        diagnostico: diagnostico,
+                        observaciones: observaciones || 'Sin observaciones adicionales.',
+                        tratamiento: tratamiento_sugerido,
+                        listaProductos: listaProductosParaCorreo 
+                    };
+                    
                     await emailService.enviarCorreoRecetaGenerada({ data }); 
-                } catch (emailError) {
-                    // Si el correo falla, lo logueamos, pero la transacción se mantiene
-                    console.error('[ERROR CORREO] Fallo al enviar correo de receta, la consulta fue creada.', emailError);
+                    
+                } else {
+                    console.warn(`[NOTIF] No se envió correo. Faltan datos: ClienteID: ${cita.id_cliente}, Email: ${correoDestino ? 'SI' : 'NO'}`);
                 }
-                // 👆🏼
-            } else {
-                console.warn(`[NOTIF] No se pudo enviar correo de receta: Falta email del cliente o datos de cliente/mascota. Cliente ID: ${id_cliente}`);
+            } catch (emailError) {
+                console.error('[ERROR CORREO] Fallo al enviar correo de receta:', emailError.message);
             }
         }
         // ------------------------------------------------------------------
         
-        // Devolvemos el folio de receta en la respuesta, si existe
         return ApiResponse.success(
             'Consulta creada correctamente.', 
             { ...nuevaConsulta.toJSON(), folio_receta }, 
             res, 
             201
         );
+
     } catch (error) {
-        // 11. Rollback
-        await transaction.rollback();
+        if (!transaction.finished) {
+            await transaction.rollback();
+        }
+        
         console.error('Error al crear consulta:', error);
         return ApiResponse.error('Error interno del servidor.', res, 500, error.message);
     }
 },
 
 crearConsultaEmergencia: async (req, res) => {
-    // 3. INICIAR TRANSACCIÓN
+    // 1. INICIAR TRANSACCIÓN
     const transaction = await sequelize.transaction();
     try {
         const { 
@@ -201,37 +228,31 @@ crearConsultaEmergencia: async (req, res) => {
         const user = req.user;
         const id_veterinario = user.tipoId;
 
-        // ... Validaciones existentes ...
+        // 2. Validaciones
         if (user.tipo !== "veterinario") {
             await transaction.rollback();
             return ApiResponse.forbidden("Solo los veterinarios pueden crear consultas.", res);
         }
-
         if (!id_veterinario) {
             await transaction.rollback();
             return ApiResponse.unauthorized("No se pudo obtener el veterinario autenticado.", res);
         }
-
         if (!id_mascota || !id_cliente || !diagnostico) {
             await transaction.rollback();
-            return ApiResponse.validation(
-                "Complete los campos requeridos: id_mascota, id_cliente y diagnostico.", null, res
-            );
+            return ApiResponse.validation("Complete: id_mascota, id_cliente y diagnostico.", null, res);
         }
-        // **5. Nueva Validación de Productos Recetados**
         if (productos_recetados && !Array.isArray(productos_recetados)) {
             await transaction.rollback();
-            return ApiResponse.validation('El campo productos_recetados debe ser una lista válida.', null, res);
+            return ApiResponse.validation('Productos recetados debe ser una lista.', null, res);
         }
-        // *************************************************************
 
         const tieneReceta = productos_recetados && productos_recetados.length > 0;
         
-        // 6. Generar Folio y Fecha de Expiración (solo si hay productos)
+        // 3. Generar Folio y Fecha
         const folio_receta = tieneReceta ? RecetaUtils.generateFolio() : null;
         const fecha_expiracion_receta = tieneReceta ? RecetaUtils.generateExpirationDate() : null;
 
-        // 7. Crear la consulta de emergencia (pasando el folio y la transacción)
+        // 4. Crear Consulta (id_cita es NULL)
         const nuevaConsulta = await ConsultaRepository.crearConsulta({
             id_cita: null,
             id_mascota,
@@ -246,7 +267,10 @@ crearConsultaEmergencia: async (req, res) => {
             fecha_expiracion_receta
         }, { transaction }); 
 
-        // 8. Crear Items de Receta Y DESCONTAR INVENTARIO
+        // Variable para recolectar nombres
+        let listaProductosParaCorreo = [];
+
+        // 5. Procesar Productos
         if (tieneReceta) {
             const itemsRecetados = productos_recetados.map(p => ({
                 id_consulta: nuevaConsulta.id,
@@ -255,58 +279,58 @@ crearConsultaEmergencia: async (req, res) => {
                 cantidad_autorizada: p.cantidad
             }));
             
-            // ------------------------------------------------------------------
-            // 🔥 8.1. VALIDACIÓN CRÍTICA DE STOCK (PRE-MOVIMIENTO) 🔥
+            // --- VALIDACIÓN DE STOCK Y RECOLECCIÓN ---
             for (const item of itemsRecetados) {
                 const producto = await ProductoRepository.obtenerPorId(item.id_producto); 
                 
                 if (!producto) {
                     await transaction.rollback();
-                    return ApiResponse.error(`El producto con ID ${item.id_producto} no fue encontrado.`, res, 404);
+                    return ApiResponse.error(`Producto ID ${item.id_producto} no encontrado.`, res, 404);
                 }
                 
                 if (producto.stock_actual < item.cantidad_autorizada) {
                     await transaction.rollback();
                     return ApiResponse.error(
-                        `Stock insuficiente para el producto '${producto.nombre}'. Necesitas ${item.cantidad_autorizada} unidades, pero solo hay ${producto.stock} en inventario.`,
-                        res, 
-                        400
+                         `Stock insuficiente para '${producto.nombre}'. Requieres ${item.cantidad_autorizada} pero hay ${producto.stock_actual}.`, res, 400
                     );
                 }
-            }
-            // ------------------------------------------------------------------
 
-            // 8.2. CREACIÓN Y DESCUENTO (Solo si la validación pasó)
+                // Guardar info para correo
+                listaProductosParaCorreo.push({
+                    nombre: producto.nombre,
+                    dosis: item.dosis,
+                    cantidad: item.cantidad_autorizada
+                });
+            }
+            
+            // --- CREACIÓN DE ITEMS Y DESCUENTO ---
             await ProductoConsultaRepository.crearItems(itemsRecetados, { transaction }); 
 
-            // 🔥 LÓGICA DE DECREMENTO Y LOG DE INVENTARIO 🔥
             for (const item of itemsRecetados) {
-                // 8.1. Decrementar stock en 'productos'
                 await ProductoRepository.decrementarStockReceta(
                     item.id_producto, 
                     item.cantidad_autorizada, 
                     { transaction }
                 );
 
-                // 8.2. Crear log de movimiento en 'movimientos_inventario'
                 await MovimientoInventarioRepository.crearMovimiento({
                     id_producto: item.id_producto,
                     id_responsable: id_veterinario,
                     tipo: 'salida', 
                     cantidad: item.cantidad_autorizada,
-                    motivo: `Reserva por Receta Médica (Folio: ${folio_receta})`
+                    motivo: `Reserva por Receta (Folio: ${folio_receta})`
                 }, { transaction });
             }
         }
 
-        // 9. Finalizar Transacción
+        // 6. CONFIRMAR TRANSACCIÓN
         await transaction.commit();
 
         // ------------------------------------------------------------------
-        // 🔥 9.5. ENVÍO DE CORREO (CORRECCIÓN DEL ERROR DE ROLLBACK) 🔥
+        // 🔥 ENVÍO DE CORREO MEJORADO (Post-Commit) 🔥
         if (tieneReceta) {
-            
             const cliente = await ClienteRepository.getById(id_cliente); 
+            // Asumiendo que getById del repo mascota devuelve el nombre
             const mascota = await MascotaRepository.getById(id_mascota); 
             
             const correoDestino = (cliente && cliente.persona) ? (cliente.persona.email || cliente.persona.correo) : null;
@@ -317,31 +341,34 @@ crearConsultaEmergencia: async (req, res) => {
                     clienteNombre: cliente.persona.nombre, 
                     mascotaNombre: mascota.nombre, 
                     folio_receta,
-                    fecha_expiracion: formatDateForEmail(fecha_expiracion_receta) 
+                    fecha_expiracion: RecetaUtils.formatDateForEmail ? RecetaUtils.formatDateForEmail(fecha_expiracion_receta) : fecha_expiracion_receta,
+                    
+                    // DATOS COMPLETOS
+                    diagnostico: diagnostico,
+                    observaciones: observaciones || 'Ninguna',
+                    tratamiento: tratamiento_sugerido || 'Ver indicaciones.',
+                    listaProductos: listaProductosParaCorreo
                 };
                 
-                // 👇🏼 CORRECCIÓN CLAVE: Usar AWAIT dentro de un TRY/CATCH local.
                 try {
                     await emailService.enviarCorreoRecetaGenerada({ data }); 
                 } catch (emailError) {
-                    console.error("[ERROR CORREO] Fallo al enviar correo de receta, la consulta fue creada.", emailError);
+                    console.error("[ERROR CORREO] Fallo envío en emergencia.", emailError);
                 }
-                // 👆🏼
             } else {
-                console.warn(`[NOTIF] No se pudo enviar correo de receta: Falta email del cliente o datos de cliente/mascota. Cliente ID: ${id_cliente}`);
+                console.warn(`[NOTIF] Faltan datos para enviar correo emergencia. ID Cliente: ${id_cliente}`);
             }
         }
         // ------------------------------------------------------------------
 
         return ApiResponse.success(
-            "Consulta de emergencia y Receta creadas correctamente.",
+            "Consulta de emergencia creada.",
             { ...nuevaConsulta.toJSON(), folio_receta },
             res,
             201
         );
 
     } catch (error) {
-        // 10. Rollback
         await transaction.rollback();
         console.error("Error al crear consulta de emergencia:", error);
         return ApiResponse.error("Error interno del servidor.", res, 500, error.message);

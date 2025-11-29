@@ -1,5 +1,15 @@
 const RecetaUtils = {
 
+    formatDateForEmail: (date) => {
+        if (!date) return 'N/A';
+        const d = new Date(date);
+        return d.toLocaleDateString('es-MX', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+    },
+
     generateFolio: () => {
         const now = new Date();
         const year = now.getFullYear();
