@@ -219,6 +219,19 @@ class ProductoRepository {
       order: [["stock_actual", "ASC"]]
     });
   }
+
+  async decrementarStockReceta(id_producto, cantidad, options = {}) {
+        // Usamos decrement para una operación UPDATE stock_actual = stock_actual - cantidad
+        return await Producto.decrement(
+            { stock_actual: cantidad },
+            { 
+                where: { id: id_producto },
+                // La transacción de la consulta se pasa aquí
+                ...options 
+            }
+        );
+    }
+
 }
 
 module.exports = new ProductoRepository();

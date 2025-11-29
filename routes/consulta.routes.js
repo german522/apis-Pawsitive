@@ -8,5 +8,7 @@ router.post('/consulta-rapida' , authenticateToken, ConsultaController.crearCons
 router.get('/mis-consultas', authenticateToken, ConsultaController.listarConsultasPorUsuario);
 router.get('/obtener/:id', authenticateToken, ConsultaController.obtenerConsultaPorId);
 router.get('/por-mascota/:id_mascota', authenticateToken, ConsultaController.obtenerConsultasPorMascota);
+router.get('/receta/:folio_receta', authenticateToken, ConsultaController.obtenerRecetaPorFolio);
+router.post('/receta/dispensar', authenticateToken, ConsultaController.dispensarReceta);
 
 module.exports = router;
