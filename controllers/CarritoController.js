@@ -68,15 +68,16 @@ const CarritoController = {
       });
 
       if (item) {
-        item.cantidad += cantidad;
-        await item.save();
-      } else {
-        await CarritoItem.create({
-          id_carrito: carrito.id,
-          id_producto,
-          cantidad,
-        });
-      }
+  item.cantidad += cantidad;
+  await item.save();
+} else {
+  await CarritoItem.create({
+    id_carrito: carrito.id,
+    id_producto,
+    cantidad,
+    precio_unitario: producto.precio
+  });
+}
 
       res.json({ message: "Producto agregado al carrito" });
     } catch (error) {
