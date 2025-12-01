@@ -40,6 +40,16 @@ const storageDocumentos = new CloudinaryStorage({
     },
 });
 
+const storageProductos = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'pawsitive/productos',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+        transformation: [{ width: 800, height: 800, crop: 'limit' }],
+        public_id: (req, file) => `producto-${Date.now()}-${file.originalname.split('.')[0]}`
+    },
+});
+
 const uploadPersona = multer({ 
     storage: storagePersonas,
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB máximo
@@ -55,9 +65,15 @@ const uploadDocumento = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB máximo
 });
 
-module.exports = { 
-    cloudinary, 
-    uploadPersona, 
-    uploadMascota, 
-    uploadDocumento 
+const uploadProducto = multer({
+    storage: storageProductos,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
+
+module.exports = {
+    cloudinary,
+    uploadPersona,
+    uploadMascota,
+    uploadDocumento,
+    uploadProducto
 };

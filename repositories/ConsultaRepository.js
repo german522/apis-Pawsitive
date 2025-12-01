@@ -1,4 +1,4 @@
-const { Consulta, Cita, Mascota, Persona, Veterinario } = require("../models");
+const { Consulta, Cita, Mascota, Persona, Veterinario, ProductoConsulta, Producto} = require("../models");
 
 class ConsultaRepository {
   async crearConsulta(data) {
@@ -73,7 +73,7 @@ class ConsultaRepository {
 
   async listarConsultasPorUsuario(tipoId) {
   return await Consulta.findAll({
-    where: { id_veterinario: tipoId }, // <-- AQUI VA EL FILTRO CORRECTO
+    where: { id_veterinario: tipoId }, 
     include: [
       {
         model: Cita,
@@ -92,6 +92,39 @@ class ConsultaRepository {
     ],
   });
 }
+
+  async obtenerPorFolioConProductos(folioReceta) {
+      return await Consulta.findOne({
+          where: { folio_receta: folioReceta },
+          include: [
+              {
+                  model: ProductoConsulta,
+                  as: 'productos_recetados', 
+                  attributes: ['id', 'id_producto', 'dosis', 'cantidad_autorizada', 'cantidad_dispensada'],
+                  include: [
+                      {
+                          model: Producto,
+                          as: 'producto', 
+                          attributes: ['id', 'nombre', 'unidad_medida']
+                      }
+                  ]
+              },
+              {
+                  model: Mascota,
+                  as: 'mascota',
+                  attributes: ['nombre', 'especie', 'raza']
+              },
+          ],
+      });
+  }
+
+  async marcarEstadoReceta(idConsulta, nuevoEstado, transaction) {
+      return await Consulta.update(
+          { estado_receta: nuevoEstado },
+          { where: { id: idConsulta }, transaction }
+      );
+  }
+
 }
 
 module.exports = new ConsultaRepository();

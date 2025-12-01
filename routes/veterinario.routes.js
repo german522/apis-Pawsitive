@@ -11,7 +11,7 @@ router.post("/register", validateRegisterVeterinario, VeterinarioController.regi
 // Rutas protegidas (solo para veterinarios autenticados)
 router.post("/logout", authenticateToken, requireVeterinario, VeterinarioController.logout);
 router.get("/profile", authenticateToken, requireVeterinario, VeterinarioController.getProfile);
-router.put("/profile", authenticateToken, requireVeterinario, VeterinarioController.updateProfile);
+router.put("/actualizar-perfil", authenticateToken, requireVeterinario, VeterinarioController.updateProfile);
 router.delete("/account", authenticateToken, requireVeterinario, VeterinarioController.deleteAccount);
 
 // Rutas específicas para veterinarios - gestión de clientes
