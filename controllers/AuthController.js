@@ -4,6 +4,8 @@ const { sequelize } = require('../models');
 const { pendingVerifications } = require('./ClienteController');
 const AuthUtils = require('../utils/auth');
 const { ValidationError, DatabaseError } = require('sequelize');
+const crypto = require('crypto');
+const emailService = require('../utils/emailService');
 
 const MAX_ATTEMPTS = 5;
 
@@ -112,6 +114,77 @@ exports.verifyCode = async (req, res) => {
   }
 };
 
+// Reenviar código de verificación
+exports.resendVerificationCode = async (req, res) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return ApiResponse.validation(
+        "El correo es requerido.",
+        null,
+        res
+      );
+    }
+
+    const email = String(correo).toLowerCase().trim();
+
+    // Buscar registro pendiente en memoria
+    const pending = pendingVerifications.get(email);
+
+    if (!pending) {
+      const persona = await PersonaRepository.getByCorreo(email);
+
+      if (persona && persona.verificado) {
+        return ApiResponse.validation(
+          "Este correo ya está verificado. Ya puedes iniciar sesión.",
+          null,
+          res
+        );
+      }
+
+      return ApiResponse.notFound(
+        "No hay un registro pendiente para este correo. Inicia el registro nuevamente.",
+        res
+      );
+    }
+
+    // Generar nuevo código de 6 dígitos
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Nueva expiración: 15 minutos (igual que en el correo)
+    const now = new Date();
+    const expiration = new Date(now.getTime() + 15 * 60 * 1000);
+
+    // Actualizar datos del registro pendiente
+    pending.codigoVerificacion = codigo;
+    pending.codigoPlano = codigo;
+    pending.codigoExpiracion = expiration;
+    pending.attempts = 0;
+
+    pendingVerifications.set(email, pending);
+
+    // Enviar correo con el nuevo código
+    await emailService.enviarCorreoVerificacion({
+      to: pending.correo || email,
+      code: codigo,
+      idempotencyKey: `resend-verification-${email}-${Date.now()}`
+    });
+
+    return ApiResponse.success(
+      "Se ha reenviado un nuevo código de verificación a tu correo.",
+      null,
+      res
+    );
+  } catch (error) {
+    console.error("Error en POST /auth/resend-verification-code:", error);
+    return ApiResponse.error(
+      "Error al reenviar el código de verificación.",
+      res
+    );
+  }
+};
+
 // Login único para clientes y veterinarios
 exports.login = async (req, res) => {
   try {
@@ -201,6 +274,120 @@ exports.login = async (req, res) => {
     return ApiResponse.error("Error interno del servidor.", res);
   }
 };
+
+// Solicitar recuperación de contraseña
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return ApiResponse.validation("El correo es requerido.", null, res);
+    }
+
+    const email = String(correo).toLowerCase().trim();
+    const persona = await PersonaRepository.getByCorreo(email);
+
+    if (!persona) {
+      return ApiResponse.validation(
+        "Correo no existente o inválido.",
+        null,
+        res
+      );
+    }
+
+    if (!persona.verificado) {
+      return ApiResponse.validation(
+        "El correo existe pero no está verificado.",
+        null,
+        res
+      );
+    }
+
+    // Generar token aleatorio
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    // Guardar token y expiración en la persona
+    await PersonaRepository.saveResetToken(persona.id, token, expiresAt);
+
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetLink = `${baseUrl}/reset-password/${token}`;
+
+    // Enviar correo
+    await emailService.sendPasswordResetEmail(persona.correo, resetLink);
+    // o si prefieres: await emailService.sendPasswordResetEmail(email, resetLink);
+
+    return ApiResponse.success(
+      "Revisa tu bandeja de entrada, el correo para recuperar tu contraseña fue enviado.",
+      null,
+      res
+    );
+  } catch (error) {
+    console.error("Error en POST /auth/forgot-password:", error);
+    return ApiResponse.error(
+      "Error al procesar la solicitud de recuperación.",
+      error.message,
+      res
+    );
+  }
+};
+
+// Establecer nueva contraseña usando token
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, nuevaContrasena, confirmarContrasena } = req.body;
+
+    // 1. Validación de campos requeridos
+    if (!token || !nuevaContrasena || !confirmarContrasena) {
+      return ApiResponse.validation(
+        "Token, nueva contraseña y confirmación son requeridos.",
+        null,
+        res
+      );
+    }
+
+    // 2. Validación: contraseñas iguales
+    if (nuevaContrasena !== confirmarContrasena) {
+      return ApiResponse.validation(
+        "Las contraseñas no coinciden.",
+        null,
+        res
+      );
+    }
+
+    // 3. Buscar persona por token
+    const persona = await PersonaRepository.findByResetToken(token);
+    if (!persona) {
+      return ApiResponse.validation("Token inválido o ya utilizado.", null, res);
+    }
+
+    // 4. Verificar expiración
+    if (!persona.reset_token_expires || persona.reset_token_expires < new Date()) {
+      return ApiResponse.validation(
+        "El token ha expirado. Solicita una nueva recuperación.",
+        null,
+        res
+      );
+    }
+
+    // 5. Hashear nueva contraseña
+    const hashedPassword = await AuthUtils.hashPassword(nuevaContrasena);
+
+    // 6. Actualizar contraseña y limpiar token
+    await PersonaRepository.resetPassword(persona.id, hashedPassword);
+
+    return ApiResponse.success(
+      "Contraseña actualizada correctamente. Ya puedes iniciar sesión con tu nueva contraseña.",
+      null,
+      res
+    );
+
+  } catch (error) {
+    console.error("Error en POST /auth/reset-password:", error);
+    return ApiResponse.error("Error al restablecer la contraseña.", res);
+  }
+};
+
 
 // Verificar token
 exports.verifyToken = async (req, res) => {

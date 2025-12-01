@@ -168,33 +168,109 @@ exports.getProfile = async (req, res) => {
 // =========================
 exports.updateProfile = async (req, res) => {
   try {
-    const personaId = req.user.id;
-    const { nombre, apellido_paterno, apellido_materno, telefono, URL_imagen } = req.body;
+    const personaId = req.user.tipoId;
 
-    if (!nombre && !apellido_paterno && !apellido_materno && !telefono && !URL_imagen) {
-      return ApiResponse.validation("Debe proporcionar al menos un campo para actualizar.", null, res);
+    // Solo permitimos actualizar estos campos
+    const {
+      nombre,
+      apellido_paterno,
+      apellido_materno,
+      telefono,
+      URL_imagen,
+      correo,
+      password
+    } = req.body;
+
+    // Si alguien intenta mandar correo o password, lo bloqueamos
+    if (correo !== undefined || password !== undefined) {
+      return ApiResponse.validation(
+        "No se puede actualizar correo ni contraseña desde este endpoint.",
+        null,
+        res
+      );
     }
 
-    const updatedData = {
-      ...(nombre && { nombre: nombre.trim() }),
-      ...(apellido_paterno && { apellido_paterno: apellido_paterno.trim() }),
-      ...(apellido_materno !== undefined && { apellido_materno: apellido_materno?.trim() || null }),
-      ...(telefono !== undefined && { telefono: telefono?.trim() || null }),
-      ...(URL_imagen !== undefined && { URL_imagen: URL_imagen?.trim() || null })
+    // Validar que al menos venga UN campo permitido (aunque luego validemos su contenido)
+    if (
+      nombre === undefined &&
+      apellido_paterno === undefined &&
+      apellido_materno === undefined &&
+      telefono === undefined &&
+      URL_imagen === undefined
+    ) {
+      return ApiResponse.validation(
+        "Debe proporcionar al menos un campo para actualizar.",
+        null,
+        res
+      );
+    }
+
+    const updatedData = {};
+
+    // Helper para validar campos de texto obligatorios (no vacíos)
+    const validarTextoObligatorio = (valor, nombreCampoLegible) => {
+      const texto = String(valor).trim();
+      if (!texto) {
+        throw new ValidationError([
+          { message: `El campo ${nombreCampoLegible} no puede estar vacío.` }
+        ]);
+      }
+      return texto;
     };
+
+    try {
+      if (nombre !== undefined) {
+        updatedData.nombre = validarTextoObligatorio(nombre, "nombre");
+      }
+
+      if (apellido_paterno !== undefined) {
+        updatedData.apellido_paterno = validarTextoObligatorio(apellido_paterno, "apellido paterno");
+      }
+
+      if (apellido_materno !== undefined) {
+        updatedData.apellido_materno = validarTextoObligatorio(apellido_materno, "apellido materno");
+      }
+
+      if (telefono !== undefined) {
+        updatedData.telefono = validarTextoObligatorio(telefono, "teléfono");
+      }
+
+      if (URL_imagen !== undefined) {
+        updatedData.URL_imagen = validarTextoObligatorio(URL_imagen, "URL de imagen");
+      }
+
+    } catch (errorValidacionCampos) {
+      // Si lanzamos nuestro ValidationError manual, lo atrapamos aquí
+      if (errorValidacionCampos instanceof ValidationError) {
+        return ApiResponse.validation(
+          errorValidacionCampos.errors.map(e => e.message),
+          null,
+          res
+        );
+      }
+      throw errorValidacionCampos;
+    }
 
     const updatedPersona = await PersonaRepository.update(personaId, updatedData);
     if (!updatedPersona) {
-      return ApiResponse.notFound("Cliente no encontrado.", res);
+      return ApiResponse.notFound("Perfil no encontrado.", res);
     }
 
-    return ApiResponse.success("Perfil actualizado exitosamente.", { persona: updatedPersona }, res);
+    return ApiResponse.success(
+      "Perfil actualizado exitosamente.",
+      { persona: updatedPersona },
+      res
+    );
 
   } catch (error) {
-    console.error("Error en PUT /clientes/profile:", error);
+    console.error("Error en PUT /auth/update-profile:", error);
 
     if (error instanceof ValidationError) {
-      return ApiResponse.validation(error.errors.map(e => e.message), null, res);
+      return ApiResponse.validation(
+        error.errors.map(e => e.message),
+        null,
+        res
+      );
     }
 
     if (error instanceof DatabaseError) {

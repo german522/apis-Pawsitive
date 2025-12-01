@@ -11,7 +11,7 @@ router.post("/register", validateRegisterCliente, ClienteController.register);
 // Rutas protegidas (solo para clientes autenticados)
 router.post("/logout", authenticateToken, requireCliente, ClienteController.logout);
 router.get("/profile", authenticateToken, requireCliente, ClienteController.getProfile);
-router.put("/profile", authenticateToken, requireCliente, ClienteController.updateProfile);
+router.put("/actualizar-perfil", authenticateToken, requireCliente, ClienteController.updateProfile);
 router.delete("/account", authenticateToken, requireCliente, ClienteController.deleteAccount);
 router.post("/subir-imagen", authenticateToken, requireCliente, uploadPersona.single('imagen'), ClienteController.subirImagen);
 
