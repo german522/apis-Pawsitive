@@ -407,6 +407,123 @@ function buildCitaCanceladaHtmlVeterinario(d) {
   </div>`;
 }
 
+// ... (Código anterior)
+
+// Nueva función para la plantilla de confirmación de compra
+function buildCorreoConfirmacionCompraHtml(d) {
+    // 1. Generamos el HTML de la lista de productos comprados
+    let productosHtml = '';
+    
+    if (d.detalles && d.detalles.length > 0) {
+        const items = d.detalles.map(item => {
+            // Asumiendo que item.producto.nombre o item.nombre viene cargado, 
+            // pero si solo pasas el detalle de la CompraDetalle, usamos los datos disponibles
+            const nombreProducto = item.producto?.nombre || `Producto ID ${item.id_producto}`;
+            const subtotal = (item.cantidad * parseFloat(item.precio_unitario)).toFixed(2);
+            return `
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:10px 0;font-size:14px;color:#333;">${nombreProducto}</td>
+                    <td style="padding:10px 0;font-size:14px;color:#555;text-align:center;">${item.cantidad}</td>
+                    <td style="padding:10px 0;font-size:14px;color:#555;text-align:right;">$${item.precio_unitario}</td>
+                    <td style="padding:10px 0;font-size:14px;color:#333;font-weight:bold;text-align:right;">$${subtotal}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        productosHtml = `
+            <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+                <thead>
+                    <tr style="background-color:#f8f8f8;">
+                        <th style="padding:10px 0;text-align:left;color:#555;font-size:13px;">Producto</th>
+                        <th style="padding:10px 0;text-align:center;color:#555;font-size:13px;">Cant.</th>
+                        <th style="padding:10px 0;text-align:right;color:#555;font-size:13px;">Precio Unit.</th>
+                        <th style="padding:10px 0;text-align:right;color:#555;font-size:13px;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>${items}</tbody>
+            </table>
+        `;
+    } else {
+        productosHtml = '<p style="color:#888; font-style:italic; font-size:14px; text-align:center;">No se registraron productos en esta compra.</p>';
+    }
+
+    return `
+    <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+                background-color:#e8f5e9; /* Tono verde claro */
+                padding:32px;
+                border-radius:12px;
+                max-width:600px;
+                margin:auto;
+                border:1px solid #c8e6c9;
+                box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+
+        <div style="text-align:center;margin-bottom:24px;">
+            <img src="https://res.cloudinary.com/dzxi5k6ez/image/upload/v1760911319/PAWSITIVE_VIBES_2_nt3js7.png" 
+                 alt="PawsitiveVibes Logo"
+                 style="width:80px;height:80px;object-fit:contain;border-radius:50%;"/>
+        </div>
+
+        <h2 style="color:#2E7D32;text-align:center;margin:0 0 8px;font-size:24px;">
+            🛒 Confirmación de Pedido
+        </h2>
+
+        <p style="color:#444;text-align:center;margin:16px 0 24px;font-size:16px;">
+            Hola <b>${d.clienteNombre}</b>. Tu compra ha sido registrada con éxito.
+        </p>
+        
+        <div style="background:#ffffff; border:1px solid #a5d6a7; border-radius:12px; padding:20px; margin-bottom:24px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            <p style="margin:0 0 8px;font-size:14px;color:#666;text-transform:uppercase;letter-spacing:1px;font-weight:bold;text-align:center;">
+                Folio de Movimiento (Para Descuento de Inventario)
+            </p>
+            <span style="display:block;
+                          background-color:#C8E6C9;
+                          color:#1B5E20;
+                          font-weight:bold;
+                          font-size:28px;
+                          letter-spacing:4px;
+                          padding:12px;
+                          border-radius:8px;
+                          text-align:center;
+                          margin-bottom:12px;">
+                ${d.folio}
+            </span>
+            <p style="margin:0;font-size:12px;color:#888;text-align:center;">
+                Este folio es la referencia de tu movimiento y debe ser usado para descontar el stock.
+            </p>
+        </div>
+        
+        <div style="background:#ffffff; border-radius:12px; padding:24px; margin-bottom:24px;">
+            <h3 style="color:#2E7D32; margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px; font-size:18px;">
+                Detalles de tu Compra
+            </h3>
+            
+            ${productosHtml}
+
+            <div style="border-top:2px solid #ddd; margin-top:15px; padding-top:10px;">
+                <p style="margin:4px 0;font-size:18px;text-align:right;color:#1B5E20;">
+                    <b>Total: $${parseFloat(d.total).toFixed(2)}</b>
+                </p>
+                <p style="margin:4px 0;font-size:14px;text-align:right;color:#555;">
+                    Estado de Pago: <b>Pendiente</b>
+                </p>
+            </div>
+        </div>
+
+        <p style="color:#666;font-size:14px;text-align:center;margin:0;">
+            Tu pedido será procesado una vez que se confirme el pago.
+        </p>
+
+        <hr style="border:none;border-top:1px solid #d4e7d4;margin:24px 0;">
+
+        <p style="text-align:center;color:#90a4ae;font-size:12px;">
+            <strong style="color:#4CAF50;">PawsitiveVibes 🐾</strong><br>
+            Cuidando a quienes más amas.<br>
+            <span style="color:#b0bec5;">${FROM}</span>
+        </p>
+    </div>
+    `;
+}
+
 /**
  * Envía correos por cita agendada con plantillas por rol.
  * @param {{data:{
@@ -499,10 +616,56 @@ Motivo (original): ${data.motivo || '-'}`;
   }
 }
 
+async function enviarCorreoConfirmacionCompra({ data }) {
+    if (provider !== 'resend') {
+        console.warn(`EMAIL_PROVIDER no es 'resend', omitiendo envío.`);
+        return;
+    }
+    if (!data.toCliente || !data.folio) {
+        console.error('enviarCorreoConfirmacionCompra: Faltan datos críticos (toCliente o folio).');
+        return;
+    }
+
+    const subjectCliente = `Confirmación de Pedido (Folio: ${data.folio})`;
+    
+    // Generamos también una versión en texto plano
+    let productosTexto = '';
+    if (data.detalles && data.detalles.length > 0) {
+        productosTexto = data.detalles.map(item => {
+            const nombre = item.producto?.nombre || `Producto ID ${item.id_producto}`;
+            return `- ${nombre} x${item.cantidad} ($${item.precio_unitario} c/u)`;
+        }).join('\n');
+    } else {
+        productosTexto = 'Sin productos registrados.';
+    }
+
+    const textBase = 
+        `Hola ${data.clienteNombre},\n\n` +
+        `Tu pedido ha sido registrado.\n` +
+        `FOLIO DE MOVIMIENTO: ${data.folio}\n\n` +
+        `PRODUCTOS:\n${productosTexto}\n\n` +
+        `TOTAL: $${parseFloat(data.total).toFixed(2)}\n\n` +
+        `El pago está pendiente de confirmación.`;
+
+    try {
+        await resend.emails.send({
+            from: `PawsitiveVibes <${FROM}>`,
+            to: data.toCliente,
+            subject: subjectCliente,
+            html: buildCorreoConfirmacionCompraHtml(data),
+            text: textBase
+        });
+        console.log('Correo de confirmación de compra enviado a:', data.toCliente);
+    } catch (err) {
+        console.error('Error enviando correo de confirmación de compra:', err?.response?.data || err?.message || err);
+    }
+}
+
 module.exports = {
   enviarCorreoVerificacion,
   enviarCorreoCitaAgendada,
   enviarCorreoCitaCancelada,
   sendPasswordResetEmail,
-  enviarCorreoRecetaGenerada
+  enviarCorreoRecetaGenerada,
+  enviarCorreoConfirmacionCompra
 };
