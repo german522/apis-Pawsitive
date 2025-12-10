@@ -4,10 +4,10 @@ module.exports = (sequelize, DataTypes) => {
     {
       id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 
-      id_cliente: {
+      id_persona: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: { model: "clientes", key: "id" },
+        references: { model: "personas", key: "id" },
       },
 
       estado: {
@@ -34,9 +34,9 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   Carrito.associate = (models) => {
-    Carrito.belongsTo(models.Cliente, {
-      foreignKey: "id_cliente",
-      as: "cliente",
+    Carrito.belongsTo(models.Persona, {
+      foreignKey: "id_persona",
+      as: "persona",
     });
 
     Carrito.hasMany(models.CarritoItem, {
