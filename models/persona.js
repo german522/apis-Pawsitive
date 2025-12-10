@@ -75,6 +75,11 @@ module.exports = (sequelize, DataTypes) => {
       as: "veterinario",
       onDelete: "CASCADE"
     });
+
+    Persona.hasMany(models.Carrito, {
+      foreignKey: "id_persona",
+      as: "carritos",
+    });
   };
 
   return Persona;

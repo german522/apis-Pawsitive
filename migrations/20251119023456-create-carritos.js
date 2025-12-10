@@ -11,11 +11,11 @@ module.exports = {
         allowNull: false,
       },
 
-      id_cliente: {
+      id_persona: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: "clientes",
+          model: "personas",
           key: "id",
         },
         onUpdate: "CASCADE",
