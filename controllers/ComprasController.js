@@ -175,73 +175,6 @@ module.exports = {
     }
 },
 
-  // 9️⃣ Actualizar estado de pago
-  actualizarEstadoPago: async (req, res) => {
-    const t = await sequelize.transaction();
-
-    try {
-      const { id } = req.params;
-      const { estado_pago } = req.body;
-
-      const compra = await Compra.findByPk(id, {
-        include: [
-          {
-            model: CompraDetalle,
-            as: "detalles",
-            include: [{ model: Producto, as: "producto" }]
-          }
-        ],
-        transaction: t
-      });
-
-      if (!compra) {
-        await t.rollback();
-        return res.status(404).json({ message: "Compra no encontrada" });
-      }
-
-      compra.estado_pago = estado_pago;
-      await compra.save({ transaction: t });
-
-      // Si el pago se completó → DESCONTAR inventario + generar movimiento
-      if (estado_pago === "pagado") {
-        for (const item of compra.detalles) {
-          const producto = item.producto;
-
-          // Usar el campo correcto 'stock_actual' según los logs
-          if (producto.stock_actual < item.cantidad) {
-            await t.rollback();
-            return res.status(400).json({
-              message: `No hay suficiente stock del producto ID: ${producto.id}`
-            });
-          }
-
-          // Descontar stock
-          producto.stock_actual -= item.cantidad;
-          await producto.save({ transaction: t });
-
-          // Registrar movimiento de inventario
-          await MovimientoInventario.create(
-            {
-              id_producto: producto.id,
-              tipo: "venta",
-              cantidad: item.cantidad,
-              descripcion: `Venta compra ID ${compra.id}`
-            },
-            { transaction: t }
-          );
-        }
-      }
-
-      await t.commit();
-      res.json({ message: "Estado de pago actualizado", compra });
-
-    } catch (error) {
-      await t.rollback();
-      res.status(500).json({ message: error.message });
-    }
-  },
-
-  // 🔟 Obtener detalle de compra
   obtenerCompraPorId: async (req, res) => {
     try {
       const { id } = req.params;
@@ -265,17 +198,16 @@ module.exports = {
     }
   },
 
-  // 1️⃣1️⃣ Obtener compras por cliente
   obtenerComprasCliente: async (req, res) => {
     try {
-      const id_cliente = req.user.id;
+      const id_persona = req.user.id;
 
       const compras = await Compra.findAll({
         include: [
           {
             model: Carrito,
             as: "carrito",
-            where: { id_cliente }
+            where: { id_persona }
           }
         ]
       });
@@ -287,17 +219,112 @@ module.exports = {
   },
 
   // 1️⃣2️⃣ Obtener ventas de un veterinario
-  obtenerVentasVeterinario: async (req, res) => {
-    try {
-      const id_veterinario = req.user.id;
+  // ComprasController.js
 
-      const compras = await Compra.findAll({
-        where: { id_veterinario }
-      });
+obtenerVentasVeterinario: async (req, res) => {
+    try {
+        // 🛑 CORRECCIÓN: Usar req.user.tipoId (que contiene el ID del Veterinario)
+        const id_veterinario = req.user.tipoId; 
 
-      res.json(compras);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+        const compras = await Compra.findAll({
+            where: { id_veterinario },
+        });
+
+        res.json(compras);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+},
+
+cancelarCompra: async (req, res) => {
+        const t = await sequelize.transaction();
+        
+        try {
+            const user = req.user;
+            const id_persona_autenticada = user.id; 
+            const { id_compra } = req.params;
+
+            // 🛑 VALIDACIÓN DE ROL: Solo el cliente puede cancelar (Si no lo maneja el middleware)
+            if (user.tipo !== 'cliente') {
+                await t.rollback();
+                return res.status(403).json({ message: "Acceso denegado. Solo el cliente dueño puede cancelar una compra." });
+            }
+            
+            // 1. OBTENER Y VALIDAR COMPRA
+            let compra = await Compra.findOne({
+                where: { id: id_compra },
+                include: [
+                    {
+                        model: Carrito,
+                        as: 'carrito', // Asumiendo que tienes una asociación Compra.belongsTo(Carrito)
+                        attributes: ['id_persona'] // Necesitamos saber quién es el dueño del carrito/compra
+                    },
+                    {
+                        model: CompraDetalle,
+                        as: 'detalles',
+                        include: [{ model: Producto, as: 'producto', attributes: ['id', 'nombre', 'stock_actual'] }]
+                    }
+                ],
+                transaction: t
+            });
+
+            if (!compra) {
+                await t.rollback();
+                return res.status(404).json({ message: "Compra no encontrada." });
+            }
+
+            // 🛑 VALIDACIÓN DE PROPIEDAD: Asegurar que el cliente sea el dueño de la compra
+            if (compra.carrito.id_persona !== id_persona_autenticada) {
+                await t.rollback();
+                return res.status(403).json({ message: "Acceso denegado. No eres el dueño de esta compra." });
+            }
+
+            if (compra.estado === 'cancelada') {
+                await t.rollback();
+                return res.status(400).json({ message: "La compra ya ha sido cancelada previamente." });
+            }
+            
+            // 2. PROCESAR DETALLES Y DEVOLVER INVENTARIO
+            // Usamos el ID del rol del cliente para el Movimiento (id_cliente)
+            const id_responsable_rol = user.tipoId; 
+
+            for (const detalle of compra.detalles) {
+                const producto = detalle.producto;
+                const cantidadDevuelta = detalle.cantidad;
+                
+                // A. Devolver stock
+                producto.stock_actual += cantidadDevuelta;
+                await producto.save({ transaction: t });
+                
+                // B. Registrar Movimiento de Inventario (Devolución/Reingreso)
+                await MovimientoInventario.create({
+                    id_producto: producto.id,
+                    id_responsable: id_responsable_rol,
+                    tipo: "devolucion", 
+                    cantidad: cantidadDevuelta,
+                    motivo: `Devolución por cancelación de Compra #${compra.id} (Iniciada por el Cliente).`
+                }, { transaction: t });
+            }
+
+            // 3. ACTUALIZAR ESTADO DE LA COMPRA
+            compra.estado = 'cancelada';
+            compra.fecha_cancelacion = new Date();
+            await compra.save({ transaction: t });
+
+            // 4. CONFIRMAR TRANSACCIÓN
+            await t.commit();
+
+            return res.json({ 
+                message: `Compra #${id_compra} cancelada exitosamente. Productos devueltos a inventario.`,
+                compraCancelada: compra 
+            });
+
+        } catch (error) {
+            if (!t.finished) {
+                await t.rollback();
+            }
+            console.error('Error al cancelar compra:', error);
+            return res.status(500).json({ message: error.message || "Error interno al cancelar compra" });
+        }
     }
-  }
 };
