@@ -6,9 +6,6 @@ const { authenticateToken, requireCliente, requireVeterinario } = require("../mi
 // 8️⃣ Crear compra desde carrito cerrado (solo cliente)
 router.post("/comprar", authenticateToken, ComprasController.crearCompra);
 
-// 9️⃣ Actualizar estado de pago (solo veterinario)
-router.post("/:id/estado", authenticateToken, requireVeterinario, ComprasController.actualizarEstadoPago);
-
 // 🔟 Obtener compra por id (cliente o veterinario)
 router.get("/:id", authenticateToken, ComprasController.obtenerCompraPorId);
 
@@ -17,5 +14,7 @@ router.get("/cliente/lista", authenticateToken, requireCliente, ComprasControlle
 
 // 1️⃣2️⃣ Obtener ventas del veterinario
 router.get("/veterinario/lista", authenticateToken, requireVeterinario, ComprasController.obtenerVentasVeterinario);
+
+router.post("/cancelar/:id_compra", authenticateToken, ComprasController.cancelarCompra);
 
 module.exports = router;
