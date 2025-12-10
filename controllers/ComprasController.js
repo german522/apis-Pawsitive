@@ -124,7 +124,8 @@ module.exports = {
                 id_veterinario: id_veterinario_asignado, // ⬅️ ID válido garantizado por la Lógica 1
                 metodo_pago,
                 total: totalCompra,
-                estado_pago: 'pagado'
+                estado_pago: 'pagado',
+                folio: folioMovimiento
             },
             { transaction: t }
         );
@@ -326,5 +327,155 @@ cancelarCompra: async (req, res) => {
             console.error('Error al cancelar compra:', error);
             return res.status(500).json({ message: error.message || "Error interno al cancelar compra" });
         }
+    },
+
+// ComprasController.js
+
+buscarPorFolio: async (req, res) => {
+    try {
+        const { folio } = req.params; // Se espera el folio en la URL
+
+        // 1. Buscar la Compra por el Folio (columna 'folio')
+        const compra = await Compra.findOne({
+            where: { folio: folio }, // ⬅️ BÚSQUEDA POR EL NUEVO CAMPO 'folio'
+            include: [{
+                model: CompraDetalle,
+                as: 'detalles',
+                include: [{ 
+                    model: Producto, 
+                    as: 'producto', 
+                    attributes: ['id', 'nombre', 'descripcion'] 
+                }] 
+            }]
+        });
+
+        if (!compra) {
+            return res.status(404).json({ message: `Folio ${folio} no encontrado.` });
+        }
+        
+        // 2. Extraer los productos
+        const medicamentos = compra.detalles.map(detalle => ({
+            id_producto: detalle.id_producto,
+            nombre: detalle.producto.nombre,
+            descripcion: detalle.producto.descripcion,
+            cantidad_comprada: detalle.cantidad
+        }));
+
+        res.json({
+            folio_compra: compra.folio,
+            compra_id: compra.id,
+            fecha_compra: compra.fecha_creacion,
+            estado: compra.estado, // Estado de la compra (pagada/cancelada)
+            dispensado: compra.estado_dispensacion || 'pendiente', // Estado de la dispensación
+            medicamentos: medicamentos,
+        });
+
+    } catch (error) {
+        console.error('Error al buscar por folio:', error);
+        res.status(500).json({ message: error.message || "Error interno al buscar por folio" });
     }
+},
+
+
+// ComprasController.js
+
+buscarPorFolio: async (req, res) => {
+    try {
+        const { folio } = req.params; // Se espera el folio en la URL
+
+        // 1. Buscar la Compra por el Folio (columna 'folio')
+        const compra = await Compra.findOne({
+            where: { folio: folio }, // ⬅️ BÚSQUEDA POR EL NUEVO CAMPO 'folio'
+            include: [{
+                model: CompraDetalle,
+                as: 'detalles',
+                include: [{ 
+                    model: Producto, 
+                    as: 'producto', 
+                    attributes: ['id', 'nombre', 'descripcion'] 
+                }] 
+            }]
+        });
+
+        if (!compra) {
+            return res.status(404).json({ message: `Folio ${folio} no encontrado.` });
+        }
+        
+        // 2. Extraer los productos
+        const medicamentos = compra.detalles.map(detalle => ({
+            id_producto: detalle.id_producto,
+            nombre: detalle.producto.nombre,
+            descripcion: detalle.producto.descripcion,
+            cantidad_comprada: detalle.cantidad
+        }));
+
+        res.json({
+            folio_compra: compra.folio,
+            compra_id: compra.id,
+            fecha_compra: compra.fecha_creacion,
+            estado: compra.estado, // Estado de la compra (pagada/cancelada)
+            dispensado: compra.estado_dispensacion || 'pendiente', // Estado de la dispensación
+            medicamentos: medicamentos,
+        });
+
+    } catch (error) {
+        console.error('Error al buscar por folio:', error);
+        res.status(500).json({ message: error.message || "Error interno al buscar por folio" });
+    }
+},
+
+marcarFolioCompletado: async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { folio } = req.params;
+        // Asumo que solo personal autorizado (Veterinario/Admin) usa este endpoint
+        const id_responsable_rol = req.user.tipoId; 
+
+        // 1. Buscar y validar la Compra por Folio
+        const compra = await Compra.findOne({
+            where: { folio: folio }, // ⬅️ BÚSQUEDA POR FOLIO
+            transaction: t
+        });
+
+        if (!compra) {
+            await t.rollback();
+            return res.status(404).json({ message: `Folio ${folio} no encontrado.` });
+        }
+        
+        // 2. Validar que la compra no esté cancelada
+        if (compra.estado === 'cancelada') {
+            await t.rollback();
+            return res.status(400).json({ message: `El folio ${folio} pertenece a una compra CANCELADA. No puede ser dispensado.` });
+        }
+
+        // 3. Validar que no haya sido dispensada
+        if (compra.estado_dispensacion === 'dispensado') {
+            await t.rollback();
+            return res.status(400).json({ message: `La dispensación para el folio ${folio} ya fue marcada como completada.` });
+        }
+        
+        // 4. Actualizar el estado de dispensación
+        compra.estado_dispensacion = 'dispensado'; 
+        compra.id_responsable_dispensacion = id_responsable_rol;
+        compra.fecha_dispensacion = new Date();
+        
+        await compra.save({ transaction: t });
+        
+        // 5. Confirmar y responder
+        await t.commit();
+
+        return res.json({
+            message: `El folio ${folio} ha sido marcado como COMPLETADO (Dispensado).`,
+            compraActualizada: compra
+        });
+
+    } catch (error) {
+        if (!t.finished) {
+            await t.rollback();
+        }
+        console.error('Error al marcar folio como completado:', error);
+        res.status(500).json({ message: error.message || "Error interno al marcar folio como completado" });
+    }
+}
+
 };

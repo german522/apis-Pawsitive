@@ -17,4 +17,17 @@ router.get("/veterinario/lista", authenticateToken, requireVeterinario, ComprasC
 
 router.post("/cancelar/:id_compra", authenticateToken, ComprasController.cancelarCompra);
 
+router.get(
+    '/buscar-folio/:folio', 
+    authenticateToken, 
+    ComprasController.buscarPorFolio
+);
+
+router.put(
+    '/completar-folio/:folio', 
+    authenticateToken,
+    requireVeterinario, // <--- Ajustar este middleware a tu rol de personal
+    ComprasController.marcarFolioCompletado
+);
+
 module.exports = router;
