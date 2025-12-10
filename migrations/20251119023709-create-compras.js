@@ -55,6 +55,13 @@ module.exports = {
         allowNull: false,
         defaultValue: "pendiente",
       },
+      
+      folio: {
+        type: Sequelize.STRING,
+        allowNull: false,
+        unique: true
+      }
+
     }, {
       tableName: "compras"
     });

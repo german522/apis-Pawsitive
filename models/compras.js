@@ -48,6 +48,13 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "pendiente",
       },
+
+      folio: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true 
+      },
+
     },
     {
       tableName: "compras",
