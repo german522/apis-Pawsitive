@@ -4,7 +4,7 @@ const ComprasController = require("../controllers/ComprasController");
 const { authenticateToken, requireCliente, requireVeterinario } = require("../middlewares/auth");
 
 // 8️⃣ Crear compra desde carrito cerrado (solo cliente)
-router.post("/", authenticateToken, requireCliente, ComprasController.crearCompra);
+router.post("/comprar", authenticateToken, ComprasController.crearCompra);
 
 // 9️⃣ Actualizar estado de pago (solo veterinario)
 router.post("/:id/estado", authenticateToken, requireVeterinario, ComprasController.actualizarEstadoPago);
